@@ -8,6 +8,7 @@ import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.*;
+import net.runelite.api.Menu;
 import net.runelite.api.coords.LocalPoint;
 import net.runelite.api.coords.WorldPoint;
 import net.runelite.api.events.ChatMessage;
@@ -403,44 +404,29 @@ public class BATilesPlugin extends Plugin {
 				for (int i = 0; i < existingPoints.size(); i++) {
 					GroundMarkerPoint point = existingPoints.get(i);
 
-					MenuEntry pointConfigMenu = client.createMenuEntry(-2 - i)
+					Menu pointConfigMenu = client.createMenuEntry(-2 - i)
 							.setOption(ColorUtil.prependColorTag("Configure", point.getColor()))
 							.setTarget("BA Tile " + (point.getLabel() == null ? "" : point.getLabel() + " ") + point.getWaves() + " " + point.getRoles())
-							.setType(MenuAction.RUNELITE_SUBMENU);
+							.setType(MenuAction.RUNELITE)
+							.createSubMenu();
 
-					client.createMenuEntry(-2 - i - j)
+					pointConfigMenu.createMenuEntry(0 - j)
 							.setOption("Set waves")
 							.setType(MenuAction.RUNELITE)
-							.setParent(pointConfigMenu)
 							.onClick(e -> setTileWaves(point));
 
-					client.createMenuEntry(-2 - i - 1 - j)
+					pointConfigMenu.createMenuEntry(0 - 1 - j)
 							.setOption("Set roles")
 							.setType(MenuAction.RUNELITE)
-							.setParent(pointConfigMenu)
 							.onClick(e -> setTileRoles(point));
 
-					client.createMenuEntry(-2 - i - 2 - j)
+					pointConfigMenu.createMenuEntry(0 - 2 - j)
 							.setOption("Set label")
 							.setType(MenuAction.RUNELITE)
-							.setParent(pointConfigMenu)
 							.onClick(e -> labelTile(point));
 
-					client.createMenuEntry(-2 - i - 3 - j)
-							.setOption("Unmark")
-							.setType(MenuAction.RUNELITE)
-							.setParent(pointConfigMenu)
-							.onClick(e -> unmarkTile(point));
-
-					client.createMenuEntry(-2 - i - 4 - j)
-							.setOption("Copy")
-							.setType(MenuAction.RUNELITE)
-							.setParent(pointConfigMenu)
-							.onClick(e -> copyTile(point));
-
-					client.createMenuEntry(-2 - i - 3 - j)
+					pointConfigMenu.createMenuEntry(0 - 3 - j)
 							.setOption("Pick color")
-							.setParent(pointConfigMenu)
 							.setType(MenuAction.RUNELITE)
 							.onClick(e ->
 							{
@@ -454,6 +440,16 @@ public class BATilesPlugin extends Plugin {
 								});
 							});
 
+					pointConfigMenu.createMenuEntry(0 - 4 - j)
+							.setOption("Copy")
+							.setType(MenuAction.RUNELITE)
+							.onClick(e -> copyTile(point));
+
+					pointConfigMenu.createMenuEntry(0 - 5 - j)
+							.setOption("Unmark")
+							.setType(MenuAction.RUNELITE)
+							.onClick(e -> unmarkTile(point));
+
 					var existingColors = points.stream()
 							.map(ColorTileMarker::getColor)
 							.distinct()
@@ -462,10 +458,9 @@ public class BATilesPlugin extends Plugin {
 					{
 						if (!color.equals(point.getColor()))
 						{
-							client.createMenuEntry(-2 - i - 4 - j)
+							pointConfigMenu.createMenuEntry(0 - 4 - j)
 									.setOption(ColorUtil.prependColorTag("Color", color))
 									.setType(MenuAction.RUNELITE)
-									.setParent(pointConfigMenu)
 									.onClick(e -> colorTile(point, color));
 						}
 					}
