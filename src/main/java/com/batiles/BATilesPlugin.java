@@ -31,7 +31,6 @@ import net.runelite.client.util.ColorUtil;
 
 import javax.inject.Inject;
 import javax.swing.*;
-import java.applet.Applet;
 import java.awt.*;
 import java.util.*;
 import java.util.List;
@@ -433,7 +432,7 @@ public class BATilesPlugin extends Plugin {
 								Color color = point.getColor();
 								SwingUtilities.invokeLater(() ->
 								{
-									RuneliteColorPicker colorPicker = colorPickerManager.create(SwingUtilities.windowForComponent((Applet) client),
+									RuneliteColorPicker colorPicker = colorPickerManager.create(client,
 											color, "Tile marker color", false);
 									colorPicker.setOnClose(c -> colorTile(point, c));
 									colorPicker.setVisible(true);
