@@ -3,13 +3,13 @@ package com.batiles;
 import com.google.common.base.Strings;
 import com.google.common.util.concurrent.Runnables;
 import com.google.gson.Gson;
-import com.google.gson.JsonSyntaxException;
-import com.google.gson.reflect.TypeToken;
+import com.google.gson.JsonParseException;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.api.ChatMessageType;
 import net.runelite.api.Client;
 import net.runelite.api.MenuEntry;
 import net.runelite.api.widgets.ComponentID;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.chat.ChatMessageManager;
 import net.runelite.client.chat.QueuedMessage;
 import net.runelite.client.game.chatbox.ChatboxPanelManager;
@@ -34,18 +34,21 @@ class BATilesSharingManager
     private static final WidgetMenuOption IMPORT_MARKERS_OPTION = new WidgetMenuOption("Import", "BA Tiles", ComponentID.MINIMAP_WORLDMAP_OPTIONS);
     private static final WidgetMenuOption CLEAR_MARKERS_OPTION = new WidgetMenuOption("Clear", "BA Tiles", ComponentID.MINIMAP_WORLDMAP_OPTIONS);
 
-    private final BATilesPlugin plugin;
     private final Client client;
     private final MenuManager menuManager;
     private final ChatMessageManager chatMessageManager;
     private final ChatboxPanelManager chatboxPanelManager;
     private final Gson gson;
+    private final BATilesStore store;
+    private final ClientThread clientThread;
 
     @Inject
-    private BATilesSharingManager(BATilesPlugin plugin, Client client, MenuManager menuManager,
-                                  ChatMessageManager chatMessageManager, ChatboxPanelManager chatboxPanelManager, Gson gson)
+    private BATilesSharingManager(Client client, MenuManager menuManager,
+                                  ChatMessageManager chatMessageManager, ChatboxPanelManager chatboxPanelManager, Gson gson,
+                                  BATilesStore store, ClientThread clientThread)
     {
-        this.plugin = plugin;
+        this.store = store;
+        this.clientThread = clientThread;
         this.client = client;
         this.menuManager = menuManager;
         this.chatMessageManager = chatMessageManager;
@@ -80,7 +83,7 @@ class BATilesSharingManager
         }
 
         List<GroundMarkerPoint> activePoints = Arrays.stream(regions)
-                .mapToObj(regionId -> plugin.getPoints(regionId).stream())
+                .mapToObj(regionId -> store.getPoints(regionId).stream())
                 .flatMap(Function.identity())
                 .collect(Collectors.toList());
 
@@ -90,7 +93,7 @@ class BATilesSharingManager
             return;
         }
 
-        final String exportDump = gson.toJson(activePoints);
+        final String exportDump = TileExport.of(activePoints, store.getPresets()).toJson(gson);
 
         log.debug("Exported BA Tiles: {}", exportDump);
 
@@ -100,7 +103,31 @@ class BATilesSharingManager
         sendChatMessage(activePoints.size() + " BA Tiles were copied to your clipboard.");
     }
 
+    /**
+     * Copies a single strategy preset and its tiles to the clipboard.
+     */
+    void exportPreset(StrategyPreset preset)
+    {
+        List<GroundMarkerPoint> presetPoints = Arrays.stream(ArenaMapLayout.REGION_IDS)
+                .mapToObj(regionId -> store.getPoints(regionId).stream())
+                .flatMap(Function.identity())
+                .filter(p -> preset.getId().equals(p.getPresetId()))
+                .collect(Collectors.toList());
+
+        final String exportDump = TileExport.of(presetPoints, List.of(preset)).toJson(gson);
+        Toolkit.getDefaultToolkit()
+                .getSystemClipboard()
+                .setContents(new StringSelection(exportDump), null);
+        sendChatMessage("Strategy preset \"" + preset.getName() + "\" (" + presetPoints.size()
+                + " BA Tiles) was copied to your clipboard.");
+    }
+
     private void promptForImport(MenuEntry menuEntry)
+    {
+        promptForImport();
+    }
+
+    void promptForImport()
     {
         final String clipboardText;
         try
@@ -124,34 +151,38 @@ class BATilesSharingManager
             return;
         }
 
-        List<GroundMarkerPoint> importPoints;
+        TileExport imported;
         try
         {
-            // CHECKSTYLE:OFF
-            importPoints = gson.fromJson(clipboardText, new TypeToken<List<GroundMarkerPoint>>(){}.getType());
-            // CHECKSTYLE:ON
+            imported = TileExport.fromJson(gson, clipboardText);
         }
-        catch (JsonSyntaxException e)
+        catch (JsonParseException | IllegalStateException e)
         {
             log.debug("Malformed JSON for clipboard import", e);
             sendChatMessage("You do not have any BA Tiles copied in your clipboard.");
             return;
         }
 
-        if (importPoints.isEmpty())
+        if (imported.getTiles().isEmpty() && imported.getPresets().isEmpty())
         {
             sendChatMessage("You do not have any BA Tiles copied in your clipboard.");
             return;
         }
 
-        chatboxPanelManager.openTextMenuInput("Are you sure you want to import " + importPoints.size() + " BA Tiles?")
-                .option("Yes", () -> importGroundMarkers(importPoints))
+        String question = "Are you sure you want to import " + imported.getTiles().size() + " BA Tiles"
+                + (imported.getPresets().isEmpty() ? "?" : "<br>and " + imported.getPresets().size() + " strategy preset"
+                + (imported.getPresets().size() == 1 ? "?" : "s?"));
+        clientThread.invokeLater(() -> chatboxPanelManager.openTextMenuInput(question)
+                .option("Yes", () -> importGroundMarkers(imported))
                 .option("No", Runnables.doNothing())
-                .build();
+                .build());
     }
 
-    private void importGroundMarkers(Collection<GroundMarkerPoint> importPoints)
+    private void importGroundMarkers(TileExport imported)
     {
+        int addedPresets = store.addPresetsIfAbsent(imported.getPresets());
+        List<GroundMarkerPoint> importPoints = imported.getTiles();
+
         // regions being imported may not be loaded on client,
         // so need to import each bunch directly into the config
         // first, collate the list of unique region ids in the import
@@ -163,7 +194,7 @@ class BATilesSharingManager
         {
             // combine imported points with existing region points
             log.debug("Importing {} points to region {}", groupedPoints.size(), regionId);
-            Collection<GroundMarkerPoint> regionPoints = plugin.getPoints(regionId);
+            Collection<GroundMarkerPoint> regionPoints = store.getPoints(regionId);
 
             List<GroundMarkerPoint> mergedList = new ArrayList<>(regionPoints.size() + groupedPoints.size());
             // add existing points
@@ -179,13 +210,12 @@ class BATilesSharingManager
                 }
             }
 
-            plugin.savePoints(regionId, mergedList);
+            store.savePoints(regionId, mergedList);
         });
 
-        // reload points from config
-        log.debug("Reloading points after import");
-        plugin.loadPoints();
-        sendChatMessage(importPoints.size() + " BA Tiles were imported from the clipboard.");
+        sendChatMessage(importPoints.size() + " BA Tiles"
+                + (addedPresets == 0 ? "" : " and " + addedPresets + " strategy preset" + (addedPresets == 1 ? "" : "s"))
+                + " were imported from the clipboard.");
     }
 
     private void promptForClear(MenuEntry entry)
@@ -197,7 +227,7 @@ class BATilesSharingManager
         }
 
         long numActivePoints = Arrays.stream(regions)
-                .mapToLong(regionId -> plugin.getPoints(regionId).size())
+                .mapToLong(regionId -> store.getPoints(regionId).size())
                 .sum();
 
         if (numActivePoints == 0)
@@ -211,10 +241,9 @@ class BATilesSharingManager
                 {
                     for (int regionId : regions)
                     {
-                        plugin.savePoints(regionId, null);
+                        store.savePoints(regionId, null);
                     }
 
-                    plugin.loadPoints();
                     sendChatMessage(numActivePoints + " BA Tile"
                             + (numActivePoints == 1 ? " was cleared." : "s were cleared."));
 
