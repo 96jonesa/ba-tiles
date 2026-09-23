@@ -123,7 +123,7 @@ public class BATilesPlugin extends Plugin {
 				rolesToDisplay(),
 				store::getActivePresetId,
 				id -> presets.stream().filter(p -> p.getId().equals(id)).findFirst().orElse(null),
-				config.showBaseTilesWithPreset());
+				store::isShowBaseWithPreset);
 
 		for (int regionId : regions)
 		{
@@ -255,7 +255,7 @@ public class BATilesPlugin extends Plugin {
 		clientThread.invokeLater(this::loadPoints);
 		eventBus.register(sharingManager);
 
-		panel = new BATilesPanel(store, config, configManager, this::getEditor);
+		panel = new BATilesPanel(store, this::getEditor);
 		navigationButton = NavigationButton.builder()
 				.tooltip("BA Tiles")
 				.icon(panelIcon())
@@ -272,8 +272,8 @@ public class BATilesPlugin extends Plugin {
 	{
 		if (editor == null)
 		{
-			editor = new TileMapEditor(SwingUtilities.getWindowAncestor(panel), store, config, configManager,
-					colorPickerManager, sharingManager);
+			editor = new TileMapEditor(SwingUtilities.getWindowAncestor(panel), store, config, colorPickerManager,
+					sharingManager);
 		}
 		return editor;
 	}

@@ -15,7 +15,6 @@ import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
-import net.runelite.client.config.ConfigManager;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.PluginPanel;
 
@@ -25,25 +24,22 @@ import net.runelite.client.ui.PluginPanel;
 class BATilesPanel extends PluginPanel
 {
 	private static final int WAVES = 10;
+	private static final String SHOW_BASE_TOOLTIP = "Show tiles that are not part of a preset while this wave's preset is active";
 
 	private final BATilesStore store;
-	private final BATilesConfig config;
-	private final ConfigManager configManager;
 	private final Supplier<TileMapEditor> editor;
 	private final Runnable storeListener = () -> SwingUtilities.invokeLater(this::refresh);
 
 	private final JComboBox<BARole> roleCombo = new JComboBox<>(BARole.values());
 	private final List<JComboBox<Object>> presetCombos = new ArrayList<>();
-	private final JCheckBox showBaseWithPreset = new JCheckBox("<html>Show non-preset tiles when a preset is active</html>");
+	private final List<JCheckBox> showBaseBoxes = new ArrayList<>();
 	// the editor opens on the in-game wave
 	private int currentWave = 1;
 	private boolean refreshing;
 
-	BATilesPanel(BATilesStore store, BATilesConfig config, ConfigManager configManager, Supplier<TileMapEditor> editor)
+	BATilesPanel(BATilesStore store, Supplier<TileMapEditor> editor)
 	{
 		this.store = store;
-		this.config = config;
-		this.configManager = configManager;
 		this.editor = editor;
 
 		setLayout(new BorderLayout());
@@ -66,6 +62,15 @@ class BATilesPanel extends PluginPanel
 		GridBagConstraints c = new GridBagConstraints();
 		c.insets = new Insets(0, 0, 6, 6);
 		c.fill = GridBagConstraints.HORIZONTAL;
+
+		c.gridy = 0;
+		c.gridx = 1;
+		waves.add(columnHeader("Preset", null), c);
+		c.gridx = 2;
+		c.fill = GridBagConstraints.NONE;
+		waves.add(columnHeader("Others", SHOW_BASE_TOOLTIP), c);
+		c.fill = GridBagConstraints.HORIZONTAL;
+
 		for (int i = 0; i < WAVES; i++)
 		{
 			int wave = i + 1;
@@ -73,38 +78,43 @@ class BATilesPanel extends PluginPanel
 			JComboBox<Object> combo = new JComboBox<>();
 			combo.addActionListener(e -> onPresetSelected(wave, combo));
 			presetCombos.add(combo);
+			JCheckBox showBase = new JCheckBox();
+			showBase.setToolTipText(SHOW_BASE_TOOLTIP);
+			showBase.addActionListener(e ->
+			{
+				if (!refreshing)
+				{
+					store.setShowBaseWithPreset(wave, role(), showBase.isSelected());
+				}
+			});
+			showBaseBoxes.add(showBase);
 
-			c.gridy = i;
+			c.gridy = i + 1;
 			c.gridx = 0;
 			c.weightx = 0;
 			waves.add(label, c);
 			c.gridx = 1;
 			c.weightx = 1;
 			waves.add(combo, c);
+			c.gridx = 2;
+			c.weightx = 0;
+			c.fill = GridBagConstraints.NONE;
+			waves.add(showBase, c);
+			c.fill = GridBagConstraints.HORIZONTAL;
 		}
 
-		JLabel help = new JLabel("<html>A preset's tiles are only shown while it is the active preset for its wave and role.</html>");
+		JLabel help = new JLabel("<html>A preset's tiles are only shown while it is the active preset for its wave and role."
+				+ "<br><br><b>Others</b>: also show tiles that are not part of a preset while a preset is active."
+				+ " They are always shown while no preset is.</html>");
 		help.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
-
-		JPanel bottom = new JPanel(new BorderLayout(0, 8));
-		bottom.add(showBaseWithPreset, BorderLayout.NORTH);
-		bottom.add(help, BorderLayout.SOUTH);
 
 		JPanel column = new JPanel(new BorderLayout(0, 8));
 		column.add(top, BorderLayout.NORTH);
 		column.add(waves, BorderLayout.CENTER);
-		column.add(bottom, BorderLayout.SOUTH);
+		column.add(help, BorderLayout.SOUTH);
 		add(column, BorderLayout.NORTH);
 
 		roleCombo.addActionListener(e -> refresh());
-		showBaseWithPreset.addActionListener(e ->
-		{
-			if (!refreshing)
-			{
-				configManager.setConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP,
-						BATilesConfig.SHOW_BASE_TILES_WITH_PRESET_KEY_NAME, showBaseWithPreset.isSelected());
-			}
-		});
 		store.addListener(storeListener);
 		refresh();
 	}
@@ -120,6 +130,14 @@ class BATilesPanel extends PluginPanel
 	void onGameStateChanged(int wave, String role)
 	{
 		SwingUtilities.invokeLater(() -> currentWave = wave);
+	}
+
+	private static JLabel columnHeader(String text, String tooltip)
+	{
+		JLabel header = new JLabel(text);
+		header.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		header.setToolTipText(tooltip);
+		return header;
 	}
 
 	private String role()
@@ -142,7 +160,6 @@ class BATilesPanel extends PluginPanel
 		refreshing = true;
 		try
 		{
-			showBaseWithPreset.setSelected(config.showBaseTilesWithPreset());
 			for (int i = 0; i < WAVES; i++)
 			{
 				int wave = i + 1;
@@ -162,8 +179,11 @@ class BATilesPanel extends PluginPanel
 					}
 				}
 				combo.setSelectedItem(active);
-				// nothing to choose between until the wave has a preset for this role
+				// nothing to choose between, and no preset to show other tiles alongside, until the wave has a preset for this role
 				combo.setEnabled(!presets.isEmpty());
+				JCheckBox showBase = showBaseBoxes.get(i);
+				showBase.setSelected(store.isShowBaseWithPreset(wave, role()));
+				showBase.setEnabled(!presets.isEmpty());
 			}
 		}
 		finally

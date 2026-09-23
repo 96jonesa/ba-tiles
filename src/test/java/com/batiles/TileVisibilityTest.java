@@ -32,7 +32,7 @@ public class TileVisibilityTest
 		Map<String, StrategyPreset> presets = new HashMap<>();
 		presets.put(DEF_W3_A.getId(), DEF_W3_A);
 		presets.put(DEF_W3_B.getId(), DEF_W3_B);
-		return new TileVisibility(waves, roles, (w, r) -> active.get(w + r), presets::get, withPreset);
+		return new TileVisibility(waves, roles, (w, r) -> active.get(w + r), presets::get, (w, r) -> withPreset);
 	}
 
 	public static class IsVisible
@@ -72,6 +72,18 @@ public class TileVisibilityTest
 		{
 			TileVisibility v = visibility(List.of(3), List.of("d"), Map.of("3d", "p1"), false);
 			assertFalse(v.isVisible(baseTile(null, null)));
+		}
+
+		@Test
+		public void showWithPresetSettingIsPerWaveAndRole()
+		{
+			Map<String, StrategyPreset> presets = Map.of(DEF_W3_A.getId(), DEF_W3_A);
+			Map<String, String> active = Map.of("3d", "p1", "4d", "p1");
+			// shown alongside wave 4's preset, but not alongside wave 3's
+			TileVisibility v = new TileVisibility(List.of(3, 4), List.of("d"), (w, r) -> active.get(w + r), presets::get,
+					(w, r) -> w == 4);
+			assertFalse(v.isVisible(baseTile(List.of(3), List.of("d"))));
+			assertTrue(v.isVisible(baseTile(List.of(4), List.of("d"))));
 		}
 
 		@Test

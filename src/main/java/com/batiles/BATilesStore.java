@@ -29,6 +29,7 @@ class BATilesStore
 	private static final String REGION_PREFIX = "region_";
 	private static final String PRESETS_KEY = "presets";
 	private static final String ACTIVE_PRESET_PREFIX = "activePreset_";
+	private static final String SHOW_BASE_WITH_PRESET_PREFIX = "showBaseWithPreset_";
 
 	private final ConfigManager configManager;
 	private final Gson gson;
@@ -275,6 +276,41 @@ class BATilesStore
 		else
 		{
 			configManager.setConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, activePresetKey(wave, role), preset.getId());
+		}
+		fireChanged();
+	}
+
+	// ---- non-preset tiles while a preset is active ----
+
+	private static String showBaseWithPresetKey(int wave, String role)
+	{
+		return SHOW_BASE_WITH_PRESET_PREFIX + wave + "_" + role;
+	}
+
+	/**
+	 * @return whether tiles that are not part of a preset are shown for the wave and role while it has an active
+	 *         preset (they are always shown while it has none). Defaults to true.
+	 */
+	boolean isShowBaseWithPreset(int wave, String role)
+	{
+		String value = configManager.getConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, showBaseWithPresetKey(wave, role));
+		return value == null || Boolean.parseBoolean(value);
+	}
+
+	void setShowBaseWithPreset(int wave, String role, boolean show)
+	{
+		if (show == isShowBaseWithPreset(wave, role))
+		{
+			return;
+		}
+
+		if (show)
+		{
+			configManager.unsetConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, showBaseWithPresetKey(wave, role));
+		}
+		else
+		{
+			configManager.setConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, showBaseWithPresetKey(wave, role), false);
 		}
 		fireChanged();
 	}

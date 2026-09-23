@@ -34,7 +34,6 @@ import javax.swing.JSlider;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
-import net.runelite.client.config.ConfigManager;
 import net.runelite.client.ui.ColorScheme;
 import net.runelite.client.ui.components.ColorJButton;
 import net.runelite.client.ui.components.colorpicker.ColorPickerManager;
@@ -56,7 +55,6 @@ class TileMapEditor extends JDialog
 
 	private final BATilesStore store;
 	private final BATilesConfig config;
-	private final ConfigManager configManager;
 	private final ColorPickerManager colorPickerManager;
 	private final BATilesSharingManager sharingManager;
 	private final Runnable storeListener = () -> SwingUtilities.invokeLater(this::refresh);
@@ -71,7 +69,7 @@ class TileMapEditor extends JDialog
 	private final JButton importButton = new JButton("Import");
 	private final JRadioButton editPresetRadio = new JRadioButton("Preset tiles");
 	private final JRadioButton editBaseRadio = new JRadioButton("Non-preset tiles");
-	private final JCheckBox showBaseWithPreset = new JCheckBox("Show non-preset tiles when a preset is active");
+	private final JCheckBox showBaseWithPreset = new JCheckBox("Show non-preset tiles while a preset is active (this wave and role)");
 	private final JComboBox<ArenaMapPanel.View> viewCombo = new JComboBox<>(ArenaMapPanel.View.values());
 	private final JSlider zoom = new JSlider(MIN_TILE_SIZE, MAX_TILE_SIZE, DEFAULT_TILE_SIZE);
 	private final ArenaMapPanel mapPanel;
@@ -100,13 +98,12 @@ class TileMapEditor extends JDialog
 	private boolean editingPreset = true;
 	private boolean refreshing;
 
-	TileMapEditor(Window owner, BATilesStore store, BATilesConfig config, ConfigManager configManager,
-				  ColorPickerManager colorPickerManager, BATilesSharingManager sharingManager)
+	TileMapEditor(Window owner, BATilesStore store, BATilesConfig config, ColorPickerManager colorPickerManager,
+				  BATilesSharingManager sharingManager)
 	{
 		super(owner, "BA Tiles map editor", ModalityType.MODELESS);
 		this.store = store;
 		this.config = config;
-		this.configManager = configManager;
 		this.colorPickerManager = colorPickerManager;
 		this.sharingManager = sharingManager;
 
@@ -213,7 +210,13 @@ class TileMapEditor extends JDialog
 		importButton.addActionListener(e -> sharingManager.promptForImport());
 		editPresetRadio.addActionListener(e -> setEditingPreset(true));
 		editBaseRadio.addActionListener(e -> setEditingPreset(false));
-		showBaseWithPreset.addActionListener(e -> setConfig(BATilesConfig.SHOW_BASE_TILES_WITH_PRESET_KEY_NAME, showBaseWithPreset.isSelected()));
+		showBaseWithPreset.addActionListener(e ->
+		{
+			if (!refreshing)
+			{
+				store.setShowBaseWithPreset(wave(), role(), showBaseWithPreset.isSelected());
+			}
+		});
 		viewCombo.addActionListener(e -> mapChanged());
 		zoom.addChangeListener(e -> mapChanged());
 
@@ -367,7 +370,7 @@ class TileMapEditor extends JDialog
 			editPresetRadio.setEnabled(hasPreset);
 			editPresetRadio.setSelected(layers().isEditingPreset());
 			editBaseRadio.setSelected(!layers().isEditingPreset());
-			showBaseWithPreset.setSelected(config.showBaseTilesWithPreset());
+			showBaseWithPreset.setSelected(store.isShowBaseWithPreset(wave(), role()));
 
 			// selection: keep the selected marker if it still exists and is editable, else fall back to the tile's first marker
 			EditorLayers layers = layers();
@@ -488,14 +491,6 @@ class TileMapEditor extends JDialog
 		this.editingPreset = editingPreset;
 		selected = null;
 		refresh();
-	}
-
-	private void setConfig(String key, boolean value)
-	{
-		if (!refreshing)
-		{
-			configManager.setConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, key, value);
-		}
 	}
 
 	// ---- presets ----

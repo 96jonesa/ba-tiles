@@ -3,6 +3,7 @@ package com.batiles;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.function.BiFunction;
+import java.util.function.BiPredicate;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 import lombok.Value;
@@ -30,10 +31,10 @@ class TileVisibility
 	 */
 	Function<String, StrategyPreset> presetLookup;
 	/**
-	 * Whether tiles that are not part of a preset are shown for a wave / role that has an active preset.
+	 * Whether tiles that are not part of a preset are shown for a (wave, role code) that has an active preset.
 	 * They are always shown for a wave / role without one.
 	 */
-	boolean showBaseTilesWithPreset;
+	BiPredicate<Integer, String> showBaseTilesWithPreset;
 
 	/**
 	 * @return the displayed values the point's values match; a null value list matches every displayed value, or a
@@ -66,7 +67,7 @@ class TileVisibility
 			for (String role : candidates(point.getRoles(), roles))
 			{
 				boolean presetActive = wave != null && role != null && activePreset.apply(wave, role) != null;
-				if (!presetActive || showBaseTilesWithPreset)
+				if (!presetActive || showBaseTilesWithPreset.test(wave, role))
 				{
 					return true;
 				}
