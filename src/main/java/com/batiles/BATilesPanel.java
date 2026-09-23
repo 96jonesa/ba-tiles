@@ -10,7 +10,6 @@ import java.util.List;
 import java.util.function.Supplier;
 import javax.swing.BorderFactory;
 import javax.swing.JButton;
-import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
 import javax.swing.JPanel;
@@ -31,7 +30,6 @@ class BATilesPanel extends PluginPanel
 
 	private final JComboBox<BARole> roleCombo = new JComboBox<>(BARole.values());
 	private final List<JComboBox<Object>> presetCombos = new ArrayList<>();
-	private final JCheckBox followGame = new JCheckBox("Follow current role", true);
 	// the editor opens on the in-game wave
 	private int currentWave = 1;
 	private boolean refreshing;
@@ -56,7 +54,6 @@ class BATilesPanel extends PluginPanel
 
 		top.add(new JLabel("Active strategy presets"));
 		top.add(roleCombo);
-		top.add(followGame);
 
 		JPanel waves = new JPanel(new GridBagLayout());
 		GridBagConstraints c = new GridBagConstraints();
@@ -103,14 +100,7 @@ class BATilesPanel extends PluginPanel
 	 */
 	void onGameStateChanged(int wave, String role)
 	{
-		SwingUtilities.invokeLater(() ->
-		{
-			currentWave = wave;
-			if (followGame.isSelected())
-			{
-				roleCombo.setSelectedItem(BARole.fromCode(role));
-			}
-		});
+		SwingUtilities.invokeLater(() -> currentWave = wave);
 	}
 
 	private String role()
