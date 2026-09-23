@@ -5,6 +5,7 @@ import net.runelite.client.config.Alpha;
 import net.runelite.client.config.Config;
 import net.runelite.client.config.ConfigGroup;
 import net.runelite.client.config.ConfigItem;
+import net.runelite.client.config.ConfigSection;
 import net.runelite.client.config.Range;
 
 @ConfigGroup(BATilesConfig.BA_TILES_CONFIG_GROUP)
@@ -28,6 +29,15 @@ public interface BATilesConfig extends Config
 	String SHOW_TILES_FOR_WAVE_8_KEY_NAME = "showTilesForWave8";
 	String SHOW_TILES_FOR_WAVE_9_KEY_NAME = "showTilesForWave9";
 	String SHOW_TILES_FOR_WAVE_10_KEY_NAME = "showTilesForWave10";
+	String SHOW_BASE_TILES_WITH_PRESET_KEY_NAME = "showBaseTilesWithPreset";
+	String SHOW_BASE_TILES_WITHOUT_PRESET_KEY_NAME = "showBaseTilesWithoutPreset";
+
+	@ConfigSection(
+			name = "Strategy presets",
+			description = "Whether tiles that are not part of a strategy preset are shown",
+			position = 20
+	)
+	String presetsSection = "presets";
 
 	@Alpha
 	@ConfigItem(
@@ -251,5 +261,29 @@ public interface BATilesConfig extends Config
 	default boolean showTilesForWave10()
 	{
 		return false;
+	}
+
+	@ConfigItem(
+			position = 21,
+			keyName = SHOW_BASE_TILES_WITH_PRESET_KEY_NAME,
+			name = "Show non-preset tiles with a preset",
+			description = "Show tiles that are not part of a strategy preset for a wave / role that has an active preset",
+			section = presetsSection
+	)
+	default boolean showBaseTilesWithPreset()
+	{
+		return true;
+	}
+
+	@ConfigItem(
+			position = 22,
+			keyName = SHOW_BASE_TILES_WITHOUT_PRESET_KEY_NAME,
+			name = "Show non-preset tiles without a preset",
+			description = "Show tiles that are not part of a strategy preset for a wave / role that has no active preset",
+			section = presetsSection
+	)
+	default boolean showBaseTilesWithoutPreset()
+	{
+		return true;
 	}
 }

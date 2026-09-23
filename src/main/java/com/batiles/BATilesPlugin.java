@@ -1,8 +1,6 @@
 package com.batiles;
 
 import com.google.common.base.Strings;
-import com.google.gson.Gson;
-import com.google.gson.reflect.TypeToken;
 import com.google.inject.Provides;
 import lombok.AccessLevel;
 import lombok.Getter;
@@ -16,6 +14,7 @@ import net.runelite.api.events.GameStateChanged;
 import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.widgets.InterfaceID;
+import net.runelite.client.callback.ClientThread;
 import net.runelite.client.config.ConfigManager;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
@@ -24,14 +23,18 @@ import net.runelite.client.events.ProfileChanged;
 import net.runelite.client.game.chatbox.ChatboxPanelManager;
 import net.runelite.client.plugins.Plugin;
 import net.runelite.client.plugins.PluginDescriptor;
+import net.runelite.client.ui.ClientToolbar;
+import net.runelite.client.ui.NavigationButton;
 import net.runelite.client.ui.components.colorpicker.ColorPickerManager;
 import net.runelite.client.ui.components.colorpicker.RuneliteColorPicker;
 import net.runelite.client.ui.overlay.OverlayManager;
 import net.runelite.client.util.ColorUtil;
 
+import javax.annotation.Nullable;
 import javax.inject.Inject;
 import javax.swing.*;
 import java.awt.*;
+import java.awt.image.BufferedImage;
 import java.util.*;
 import java.util.List;
 import java.util.stream.Collectors;
@@ -43,9 +46,9 @@ import java.util.stream.Collectors;
 		tags = {"minigame", "overlay", "tiles"}
 )
 public class BATilesPlugin extends Plugin {
-	private static final String CONFIG_GROUP = "baTiles";
 	private static final String WALK_HERE = "Walk here";
-	private static final String REGION_PREFIX = "region_";
+	private static final List<Integer> ALL_WAVES = List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+	private static final List<String> ALL_ROLES = List.of("a", "c", "d", "h");
 	private static final int BA_WAVE_NUM_INDEX = 2;
 	private static final int START_WAVE = 1;
 
@@ -77,39 +80,25 @@ public class BATilesPlugin extends Plugin {
 	private BATilesSharingManager sharingManager;
 
 	@Inject
-	private Gson gson;
+	private ColorPickerManager colorPickerManager;
 
 	@Inject
-	private ColorPickerManager colorPickerManager;
+	private BATilesStore store;
+
+	@Inject
+	private ClientThread clientThread;
+
+	@Inject
+	private ClientToolbar clientToolbar;
+
+	private final Runnable storeListener = () -> clientThread.invokeLater(this::loadPoints);
+	private BATilesPanel panel;
+	private NavigationButton navigationButton;
+	private TileMapEditor editor;
 
 	private int currentWave = START_WAVE;
 	private String currentRole = "a";
 	private GroundMarkerPoint copiedPoint = null;
-
-	void savePoints(int regionId, Collection<GroundMarkerPoint> points)
-	{
-		if (points == null || points.isEmpty())
-		{
-			configManager.unsetConfiguration(CONFIG_GROUP, REGION_PREFIX + regionId);
-			return;
-		}
-
-		String json = gson.toJson(points);
-		configManager.setConfiguration(CONFIG_GROUP, REGION_PREFIX + regionId, json);
-	}
-
-	Collection<GroundMarkerPoint> getPoints(int regionId)
-	{
-		String json = configManager.getConfiguration(CONFIG_GROUP, REGION_PREFIX + regionId);
-		if (Strings.isNullOrEmpty(json))
-		{
-			return Collections.emptyList();
-		}
-
-		// CHECKSTYLE:OFF
-		return gson.fromJson(json, new TypeToken<List<GroundMarkerPoint>>(){}.getType());
-		// CHECKSTYLE:ON
-	}
 
 	@Provides
 	BATilesConfig provideConfig(ConfigManager configManager)
@@ -128,15 +117,23 @@ public class BATilesPlugin extends Plugin {
 			return;
 		}
 
+		List<StrategyPreset> presets = store.getPresets();
+		TileVisibility visibility = new TileVisibility(
+				wavesToDisplay(),
+				rolesToDisplay(),
+				store::getActivePresetId,
+				id -> presets.stream().filter(p -> p.getId().equals(id)).findFirst().orElse(null),
+				config.showBaseTilesWithPreset(),
+				config.showBaseTilesWithoutPreset());
+
 		for (int regionId : regions)
 		{
 			// load points for region
 			log.debug("Loading points for region {}", regionId);
-			Collection<GroundMarkerPoint> regionPoints = getPoints(regionId);
+			Collection<GroundMarkerPoint> regionPoints = store.getPoints(regionId);
 
 			Collection<GroundMarkerPoint> pointsToLoad = regionPoints.stream()
-					.filter(point -> point.getWaves() == null || containsAtLeastOneWave(point.getWaves(), wavesToDisplay()))
-					.filter(point -> point.getRoles() == null || containsAtLeastOneRole(point.getRoles(), rolesToDisplay()))
+					.filter(visibility::isVisible)
 					.collect(Collectors.toList());
 
 			Collection<ColorTileMarker> colorTileMarkers = translateToColorTileMarker(pointsToLoad);
@@ -220,26 +217,6 @@ public class BATilesPlugin extends Plugin {
 		return roles;
 	}
 
-	boolean containsAtLeastOneWave(List<Integer> checkIfContains, List<Integer> waves) {
-		for (int wave : waves) {
-			if (checkIfContains.contains(wave)) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
-	boolean containsAtLeastOneRole(List<String> checkIfContains, List<String> roles) {
-		for (String role : roles) {
-			if (checkIfContains.contains(role)) {
-				return true;
-			}
-		}
-
-		return false;
-	}
-
 	/**
 	 * Translate a collection of ground marker points to color tile markers, accounting for instances
 	 *
@@ -275,14 +252,63 @@ public class BATilesPlugin extends Plugin {
 			sharingManager.addImportExportMenuOptions();
 			sharingManager.addClearMenuOption();
 		}
-		loadPoints();
+		store.addListener(storeListener);
+		clientThread.invokeLater(this::loadPoints);
 		eventBus.register(sharingManager);
+
+		panel = new BATilesPanel(store, this::getEditor);
+		navigationButton = NavigationButton.builder()
+				.tooltip("BA Tiles")
+				.icon(panelIcon())
+				.priority(10)
+				.panel(panel)
+				.build();
+		clientToolbar.addNavigation(navigationButton);
+	}
+
+	/**
+	 * The tile map editor pop-up, created on first use. Must be called on the Swing event thread.
+	 */
+	private TileMapEditor getEditor()
+	{
+		if (editor == null)
+		{
+			editor = new TileMapEditor(SwingUtilities.getWindowAncestor(panel), store, config, configManager,
+					colorPickerManager, sharingManager);
+		}
+		return editor;
+	}
+
+	private static BufferedImage panelIcon()
+	{
+		// a 3x3 grid of tiles with the centre one marked
+		BufferedImage icon = new BufferedImage(16, 16, BufferedImage.TYPE_INT_ARGB);
+		Graphics2D g = icon.createGraphics();
+		g.setColor(new Color(200, 200, 200));
+		for (int i = 0; i < 4; i++)
+		{
+			g.drawLine(i * 5, 0, i * 5, 15);
+			g.drawLine(0, i * 5, 15, i * 5);
+		}
+		g.setColor(Color.YELLOW);
+		g.fillRect(6, 6, 4, 4);
+		g.dispose();
+		return icon;
 	}
 
 	@Override
 	public void shutDown()
 	{
 		eventBus.unregister(sharingManager);
+		store.removeListener(storeListener);
+		clientToolbar.removeNavigation(navigationButton);
+		panel.shutDown();
+		TileMapEditor openEditor = editor;
+		editor = null;
+		if (openEditor != null)
+		{
+			SwingUtilities.invokeLater(openEditor::dispose);
+		}
 		overlayManager.remove(overlay);
 		sharingManager.removeMenuOptions();
 		points.clear();
@@ -298,8 +324,17 @@ public class BATilesPlugin extends Plugin {
 
 			try {
 				currentWave = Integer.parseInt(message[BA_WAVE_NUM_INDEX]);
-			} catch (NumberFormatException e) {}
+			} catch (NumberFormatException e) {
+				return;
+			}
+			onWaveOrRoleChanged();
 		}
+	}
+
+	private void onWaveOrRoleChanged()
+	{
+		panel.onGameStateChanged(currentWave, currentRole);
+		loadPoints();
 	}
 
 	@Subscribe
@@ -327,13 +362,16 @@ public class BATilesPlugin extends Plugin {
 				currentRole = "c";
 				break;
 			}
+			default:
+				return;
 		}
+		onWaveOrRoleChanged();
 	}
 
 	@Subscribe
 	public void onProfileChanged(ProfileChanged profileChanged)
 	{
-		loadPoints();
+		store.fireChanged();
 	}
 
 	@Subscribe
@@ -352,24 +390,63 @@ public class BATilesPlugin extends Plugin {
 	public void onMenuEntryAdded(MenuEntryAdded event)
 	{
 		final boolean hotKeyPressed = client.isKeyPressed(KeyCode.KC_CONTROL);
-		if (hotKeyPressed && event.getOption().equals(WALK_HERE))
+		if (!hotKeyPressed || !event.getOption().equals(WALK_HERE))
 		{
-			final Tile selectedSceneTile = client.getSelectedSceneTile();
+			return;
+		}
 
-			if (selectedSceneTile == null)
-			{
-				return;
-			}
+		final Tile selectedSceneTile = client.getSelectedSceneTile();
+		if (selectedSceneTile == null)
+		{
+			return;
+		}
 
-			final WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, selectedSceneTile.getLocalLocation());
-			final int regionId = worldPoint.getRegionID();
-			var regionPoints = getPoints(regionId);
-			var existingPoints = regionPoints.stream()
-					.filter(p -> p.getRegionX() == worldPoint.getRegionX() && p.getRegionY() == worldPoint.getRegionY() && p.getZ() == worldPoint.getPlane())
-					.collect(Collectors.toList());
+		final WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, selectedSceneTile.getLocalLocation());
+		final int regionId = worldPoint.getRegionID();
+		var existingPoints = store.getPoints(regionId).stream()
+				.filter(p -> p.isAt(regionId, worldPoint.getRegionX(), worldPoint.getRegionY(), worldPoint.getPlane()))
+				.collect(Collectors.toList());
+		List<StrategyPreset> presets = store.getPresets();
+		// preset tiles only make sense inside the arena of the preset's wave (e.g. not in the lobby after a game)
+		Optional<StrategyPreset> activePreset = store.getPreset(store.getActivePresetId(currentWave, currentRole))
+				.filter(p -> isInPresetArena(p, worldPoint));
 
-			client.createMenuEntry(-1)
+		int index = -1;
+
+		client.createMenuEntry(index--)
+				.setOption("Mark")
+				.setTarget("BA Tile")
+				.setType(MenuAction.RUNELITE)
+				.onClick(e ->
+				{
+					Tile target = client.getSelectedSceneTile();
+					if (target != null)
+					{
+						markTile(target.getLocalLocation(), null);
+					}
+				});
+
+		if (activePreset.isPresent())
+		{
+			StrategyPreset preset = activePreset.get();
+			client.createMenuEntry(index--)
 					.setOption("Mark")
+					.setTarget("BA Tile (" + preset.getName() + ")")
+					.setType(MenuAction.RUNELITE)
+					.onClick(e ->
+					{
+						Tile target = client.getSelectedSceneTile();
+						if (target != null)
+						{
+							markTile(target.getLocalLocation(), preset);
+						}
+					});
+		}
+
+		if (copiedPoint != null)
+		{
+			client.createMenuEntry(index--)
+					.setOption("Paste")
 					.setTarget("BA Tile")
 					.setType(MenuAction.RUNELITE)
 					.onClick(e ->
@@ -377,92 +454,84 @@ public class BATilesPlugin extends Plugin {
 						Tile target = client.getSelectedSceneTile();
 						if (target != null)
 						{
-							markTile(target.getLocalLocation());
+							pasteTile(target.getLocalLocation());
 						}
 					});
+		}
 
-			int j = 0;
+		for (GroundMarkerPoint point : existingPoints)
+		{
+			String presetName = point.isPresetTile()
+					? presets.stream().filter(p -> p.getId().equals(point.getPresetId())).map(StrategyPreset::getName).findFirst().orElse("deleted preset")
+					: null;
+			String target = "BA Tile " + (point.getLabel() == null ? "" : point.getLabel() + " ")
+					+ (presetName != null ? "(" + presetName + ")" : point.getWaves() + " " + point.getRoles());
 
-			if (copiedPoint != null) {
-				client.createMenuEntry(-2)
-						.setOption("Paste")
-						.setTarget("BA Tile")
+			Menu pointConfigMenu = client.createMenuEntry(index--)
+					.setOption(ColorUtil.prependColorTag("Configure", point.getColor()))
+					.setTarget(target)
+					.setType(MenuAction.RUNELITE)
+					.createSubMenu();
+
+			int subIndex = 0;
+
+			// a preset tile always belongs to exactly its preset's wave and role
+			if (!point.isPresetTile())
+			{
+				pointConfigMenu.createMenuEntry(subIndex--)
+						.setOption("Set waves")
 						.setType(MenuAction.RUNELITE)
-						.onClick(e ->
-						{
-							Tile target = client.getSelectedSceneTile();
-							if (target != null) {
-								pasteTile(target.getLocalLocation());
-							}
-						});
+						.onClick(e -> setTileWaves(point));
 
-				j = 1;
+				pointConfigMenu.createMenuEntry(subIndex--)
+						.setOption("Set roles")
+						.setType(MenuAction.RUNELITE)
+						.onClick(e -> setTileRoles(point));
 			}
 
-			if (!existingPoints.isEmpty()) {
-				for (int i = 0; i < existingPoints.size(); i++) {
-					GroundMarkerPoint point = existingPoints.get(i);
+			pointConfigMenu.createMenuEntry(subIndex--)
+					.setOption("Set label")
+					.setType(MenuAction.RUNELITE)
+					.onClick(e -> labelTile(point));
 
-					Menu pointConfigMenu = client.createMenuEntry(-2 - i)
-							.setOption(ColorUtil.prependColorTag("Configure", point.getColor()))
-							.setTarget("BA Tile " + (point.getLabel() == null ? "" : point.getLabel() + " ") + point.getWaves() + " " + point.getRoles())
-							.setType(MenuAction.RUNELITE)
-							.createSubMenu();
-
-					pointConfigMenu.createMenuEntry(0 - j)
-							.setOption("Set waves")
-							.setType(MenuAction.RUNELITE)
-							.onClick(e -> setTileWaves(point));
-
-					pointConfigMenu.createMenuEntry(0 - 1 - j)
-							.setOption("Set roles")
-							.setType(MenuAction.RUNELITE)
-							.onClick(e -> setTileRoles(point));
-
-					pointConfigMenu.createMenuEntry(0 - 2 - j)
-							.setOption("Set label")
-							.setType(MenuAction.RUNELITE)
-							.onClick(e -> labelTile(point));
-
-					pointConfigMenu.createMenuEntry(0 - 3 - j)
-							.setOption("Pick color")
-							.setType(MenuAction.RUNELITE)
-							.onClick(e ->
-							{
-								Color color = point.getColor();
-								SwingUtilities.invokeLater(() ->
-								{
-									RuneliteColorPicker colorPicker = colorPickerManager.create(client,
-											color, "Tile marker color", false);
-									colorPicker.setOnClose(c -> colorTile(point, c));
-									colorPicker.setVisible(true);
-								});
-							});
-
-					pointConfigMenu.createMenuEntry(0 - 4 - j)
-							.setOption("Copy")
-							.setType(MenuAction.RUNELITE)
-							.onClick(e -> copyTile(point));
-
-					pointConfigMenu.createMenuEntry(0 - 5 - j)
-							.setOption("Unmark")
-							.setType(MenuAction.RUNELITE)
-							.onClick(e -> unmarkTile(point));
-
-					var existingColors = points.stream()
-							.map(ColorTileMarker::getColor)
-							.distinct()
-							.collect(Collectors.toList());
-					for (Color color : existingColors)
+			pointConfigMenu.createMenuEntry(subIndex--)
+					.setOption("Pick color")
+					.setType(MenuAction.RUNELITE)
+					.onClick(e ->
 					{
-						if (!color.equals(point.getColor()))
+						Color color = point.getColor();
+						SwingUtilities.invokeLater(() ->
 						{
-							pointConfigMenu.createMenuEntry(0 - 4 - j)
-									.setOption(ColorUtil.prependColorTag("Color", color))
-									.setType(MenuAction.RUNELITE)
-									.onClick(e -> colorTile(point, color));
-						}
-					}
+							RuneliteColorPicker colorPicker = colorPickerManager.create(client,
+									color, "Tile marker color", false);
+							colorPicker.setOnClose(c -> clientThread.invokeLater(() -> colorTile(point, c)));
+							colorPicker.setVisible(true);
+						});
+					});
+
+			pointConfigMenu.createMenuEntry(subIndex--)
+					.setOption("Copy")
+					.setType(MenuAction.RUNELITE)
+					.onClick(e -> copyTile(point));
+
+			pointConfigMenu.createMenuEntry(subIndex--)
+					.setOption("Unmark")
+					.setType(MenuAction.RUNELITE)
+					.onClick(e -> unmarkTile(point));
+
+			var existingColors = points.stream()
+					.map(ColorTileMarker::getColor)
+					.filter(Objects::nonNull)
+					.distinct()
+					.collect(Collectors.toList());
+			for (Color color : existingColors)
+			{
+				if (!color.equals(point.getColor()))
+				{
+					pointConfigMenu.createMenuEntry(subIndex--)
+							.setOption(ColorUtil.prependColorTag("Color", color))
+							.setType(MenuAction.RUNELITE)
+							.onClick(e -> colorTile(point, color));
 				}
 			}
 		}
@@ -482,10 +551,19 @@ public class BATilesPlugin extends Plugin {
 			}
 		}
 
-		loadPoints();
+		if (event.getGroup().equals(BATilesConfig.BA_TILES_CONFIG_GROUP))
+		{
+			// reloads the tiles, and refreshes the panel and editor (e.g. for toggles changed in the config panel)
+			store.fireChanged();
+		}
 	}
 
-	private void markTile(LocalPoint localPoint)
+	private static boolean isInPresetArena(StrategyPreset preset, WorldPoint worldPoint)
+	{
+		return worldPoint.getPlane() == 0 && worldPoint.getRegionID() == ArenaMapLayout.fromWave(preset.getWave()).getRegionId();
+	}
+
+	private void markTile(LocalPoint localPoint, @Nullable StrategyPreset preset)
 	{
 		if (localPoint == null)
 		{
@@ -494,29 +572,19 @@ public class BATilesPlugin extends Plugin {
 
 		WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, localPoint);
 
-		int regionId = worldPoint.getRegionID();
-		List<Integer> waves = List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
-		List<String> roles = List.of("a", "c", "d", "h");
-		GroundMarkerPoint point = new GroundMarkerPoint(regionId, worldPoint.getRegionX(), worldPoint.getRegionY(), worldPoint.getPlane(), config.markerColor(), null, waves, roles);
+		List<Integer> waves = preset == null ? ALL_WAVES : List.of(preset.getWave());
+		List<String> roles = preset == null ? ALL_ROLES : List.of(preset.getRole());
+		GroundMarkerPoint point = new GroundMarkerPoint(worldPoint.getRegionID(), worldPoint.getRegionX(), worldPoint.getRegionY(),
+				worldPoint.getPlane(), config.markerColor(), null, waves, roles, preset == null ? null : preset.getId());
 		log.debug("Updating point: {} - {}", point, worldPoint);
 
-		List<GroundMarkerPoint> groundMarkerPoints = new ArrayList<>(getPoints(regionId));
-		groundMarkerPoints.add(point);
-
-		savePoints(regionId, groundMarkerPoints);
-
-		loadPoints();
+		store.addPoint(point);
 	}
 
-	private void unmarkTile(GroundMarkerPoint existing) {
+	private void unmarkTile(GroundMarkerPoint existing)
+	{
 		log.debug("Updating point: {}", existing);
-
-		List<GroundMarkerPoint> groundMarkerPoints = new ArrayList<>(getPoints(existing.getRegionId()));
-		groundMarkerPoints.remove(existing);
-
-		savePoints(existing.getRegionId(), groundMarkerPoints);
-
-		loadPoints();
+		store.removePoint(existing);
 	}
 
 	private void labelTile(GroundMarkerPoint existing)
@@ -527,30 +595,19 @@ public class BATilesPlugin extends Plugin {
 				{
 					input = Strings.emptyToNull(input);
 
-					if (input != null && input.length() > 10) {
-						input = input.substring(0, 10);
+					if (input != null && input.length() > TileMapEditor.MAX_LABEL_LENGTH) {
+						input = input.substring(0, TileMapEditor.MAX_LABEL_LENGTH);
 					}
 
-					var newPoint = new GroundMarkerPoint(existing.getRegionId(), existing.getRegionX(), existing.getRegionY(), existing.getZ(), existing.getColor(), input, existing.getWaves(), existing.getRoles());
-					Collection<GroundMarkerPoint> points = new ArrayList<>(getPoints(existing.getRegionId()));
-					points.remove(existing);
-					points.add(newPoint);
-					savePoints(existing.getRegionId(), points);
-
-					loadPoints();
+					String label = input;
+					store.updatePoint(existing, p -> p.withLabel(label));
 				})
 				.build();
 	}
 
 	private void colorTile(GroundMarkerPoint existing, Color newColor)
 	{
-		var newPoint = new GroundMarkerPoint(existing.getRegionId(), existing.getRegionX(), existing.getRegionY(), existing.getZ(), newColor, existing.getLabel(), existing.getWaves(), existing.getRoles());
-		Collection<GroundMarkerPoint> points = new ArrayList<>(getPoints(existing.getRegionId()));
-		points.remove(existing);
-		points.add(newPoint);
-		savePoints(existing.getRegionId(), points);
-
-		loadPoints();
+		store.updatePoint(existing, p -> p.withColor(newColor));
 	}
 
 	private void setTileWaves(GroundMarkerPoint existing)
@@ -591,13 +648,7 @@ public class BATilesPlugin extends Plugin {
 
 					Collections.sort(waves);
 
-					var newPoint = new GroundMarkerPoint(existing.getRegionId(), existing.getRegionX(), existing.getRegionY(), existing.getZ(), existing.getColor(), existing.getLabel(), waves, existing.getRoles());
-					Collection<GroundMarkerPoint> points = new ArrayList<>(getPoints(existing.getRegionId()));
-					points.remove(existing);
-					points.add(newPoint);
-					savePoints(existing.getRegionId(), points);
-
-					loadPoints();
+					store.updatePoint(existing, p -> p.withWaves(waves));
 				})
 				.build();
 	}
@@ -623,7 +674,7 @@ public class BATilesPlugin extends Plugin {
 					for (String token : tokens) {
 						String role = token.trim();
 
-						if (!role.equals("a") && !role.equals("c") && !role.equals("d") && !role.equals("h")) {
+						if (BARole.fromCode(role) == null) {
 							return;
 						}
 
@@ -634,13 +685,7 @@ public class BATilesPlugin extends Plugin {
 
 					Collections.sort(roles);
 
-					var newPoint = new GroundMarkerPoint(existing.getRegionId(), existing.getRegionX(), existing.getRegionY(), existing.getZ(), existing.getColor(), existing.getLabel(), existing.getWaves(), roles);
-					Collection<GroundMarkerPoint> points = new ArrayList<>(getPoints(existing.getRegionId()));
-					points.remove(existing);
-					points.add(newPoint);
-					savePoints(existing.getRegionId(), points);
-
-					loadPoints();
+					store.updatePoint(existing, p -> p.withRoles(roles));
 				})
 				.build();
 	}
@@ -661,12 +706,17 @@ public class BATilesPlugin extends Plugin {
 
 		WorldPoint worldPoint = WorldPoint.fromLocalInstance(client, localPoint);
 
-		int regionId = worldPoint.getRegionID();
-		var newPoint = new GroundMarkerPoint(regionId, worldPoint.getRegionX(), worldPoint.getRegionY(), worldPoint.getPlane(), copiedPoint.getColor(), copiedPoint.getLabel(), copiedPoint.getWaves(), copiedPoint.getRoles());
-		Collection<GroundMarkerPoint> points = new ArrayList<>(getPoints(regionId));
-		points.add(newPoint);
-		savePoints(regionId, points);
+		// a copied preset tile stays in its preset only if that preset still exists and this tile is in its arena
+		GroundMarkerPoint copy = copiedPoint;
+		if (copy.isPresetTile() && !store.getPreset(copy.getPresetId()).filter(p -> isInPresetArena(p, worldPoint)).isPresent())
+		{
+			copy = copy.withPresetId(null);
+		}
 
-		loadPoints();
+		store.addPoint(copy
+				.withRegionId(worldPoint.getRegionID())
+				.withRegionX(worldPoint.getRegionX())
+				.withRegionY(worldPoint.getRegionY())
+				.withZ(worldPoint.getPlane()));
 	}
 }
