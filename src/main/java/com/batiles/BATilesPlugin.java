@@ -123,8 +123,7 @@ public class BATilesPlugin extends Plugin {
 				rolesToDisplay(),
 				store::getActivePresetId,
 				id -> presets.stream().filter(p -> p.getId().equals(id)).findFirst().orElse(null),
-				config.showBaseTilesWithPreset(),
-				config.showBaseTilesWithoutPreset());
+				config.showBaseTilesWithPreset());
 
 		for (int regionId : regions)
 		{

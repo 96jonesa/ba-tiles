@@ -31,12 +31,9 @@ class TileVisibility
 	Function<String, StrategyPreset> presetLookup;
 	/**
 	 * Whether tiles that are not part of a preset are shown for a wave / role that has an active preset.
+	 * They are always shown for a wave / role without one.
 	 */
 	boolean showBaseTilesWithPreset;
-	/**
-	 * Whether tiles that are not part of a preset are shown for a wave / role that has no active preset.
-	 */
-	boolean showBaseTilesWithoutPreset;
 
 	/**
 	 * @return the displayed values the point's values match; a null value list matches every displayed value, or a
@@ -69,7 +66,7 @@ class TileVisibility
 			for (String role : candidates(point.getRoles(), roles))
 			{
 				boolean presetActive = wave != null && role != null && activePreset.apply(wave, role) != null;
-				if (presetActive ? showBaseTilesWithPreset : showBaseTilesWithoutPreset)
+				if (!presetActive || showBaseTilesWithPreset)
 				{
 					return true;
 				}

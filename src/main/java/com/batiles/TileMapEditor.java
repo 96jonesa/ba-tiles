@@ -72,7 +72,6 @@ class TileMapEditor extends JDialog
 	private final JRadioButton editPresetRadio = new JRadioButton("Preset tiles");
 	private final JRadioButton editBaseRadio = new JRadioButton("Non-preset tiles");
 	private final JCheckBox showBaseWithPreset = new JCheckBox("Show non-preset tiles when a preset is active");
-	private final JCheckBox showBaseWithoutPreset = new JCheckBox("Show non-preset tiles when no preset is active");
 	private final JComboBox<ArenaMapPanel.View> viewCombo = new JComboBox<>(ArenaMapPanel.View.values());
 	private final JSlider zoom = new JSlider(MIN_TILE_SIZE, MAX_TILE_SIZE, DEFAULT_TILE_SIZE);
 	private final ArenaMapPanel mapPanel;
@@ -197,7 +196,6 @@ class TileMapEditor extends JDialog
 		editing.add(editBaseRadio);
 		editing.add(Box.createHorizontalStrut(12));
 		editing.add(showBaseWithPreset);
-		editing.add(showBaseWithoutPreset);
 
 		JPanel view = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
 		view.add(new JLabel("View"));
@@ -216,7 +214,6 @@ class TileMapEditor extends JDialog
 		editPresetRadio.addActionListener(e -> setEditingPreset(true));
 		editBaseRadio.addActionListener(e -> setEditingPreset(false));
 		showBaseWithPreset.addActionListener(e -> setConfig(BATilesConfig.SHOW_BASE_TILES_WITH_PRESET_KEY_NAME, showBaseWithPreset.isSelected()));
-		showBaseWithoutPreset.addActionListener(e -> setConfig(BATilesConfig.SHOW_BASE_TILES_WITHOUT_PRESET_KEY_NAME, showBaseWithoutPreset.isSelected()));
 		viewCombo.addActionListener(e -> mapChanged());
 		zoom.addChangeListener(e -> mapChanged());
 
@@ -371,7 +368,6 @@ class TileMapEditor extends JDialog
 			editPresetRadio.setSelected(layers().isEditingPreset());
 			editBaseRadio.setSelected(!layers().isEditingPreset());
 			showBaseWithPreset.setSelected(config.showBaseTilesWithPreset());
-			showBaseWithoutPreset.setSelected(config.showBaseTilesWithoutPreset());
 
 			// selection: keep the selected marker if it still exists and is editable, else fall back to the tile's first marker
 			EditorLayers layers = layers();

@@ -39,9 +39,9 @@ wave and role. At most one preset is active per wave / role, and "No preset" is 
   preset; the tiles of the other layer are shown faded.
 - In game, ctrl+right-click a tile and choose **Mark BA Tile (preset name)** to add it to the active preset for your
   current wave and role.
-- Tiles that are not part of a preset keep working as before. Whether they are shown is toggleable separately for a
-  wave / role that has an active preset and for one that does not, in the editor or in the plugin's config
-  ("Show non-preset tiles with a preset" / "Show non-preset tiles without a preset").
+- Tiles that are not part of a preset keep working as before, and are always shown for a wave / role without an active
+  preset. Whether they are also shown alongside an active preset is toggleable, in the editor or in the plugin's config
+  ("Show non-preset tiles with a preset").
 
 **Export** in the editor copies the active preset and its tiles to the clipboard, and **Import** adds tiles and presets
 from the clipboard.

@@ -30,11 +30,10 @@ public interface BATilesConfig extends Config
 	String SHOW_TILES_FOR_WAVE_9_KEY_NAME = "showTilesForWave9";
 	String SHOW_TILES_FOR_WAVE_10_KEY_NAME = "showTilesForWave10";
 	String SHOW_BASE_TILES_WITH_PRESET_KEY_NAME = "showBaseTilesWithPreset";
-	String SHOW_BASE_TILES_WITHOUT_PRESET_KEY_NAME = "showBaseTilesWithoutPreset";
 
 	@ConfigSection(
 			name = "Strategy presets",
-			description = "Whether tiles that are not part of a strategy preset are shown",
+			description = "Whether tiles that are not part of a strategy preset are shown while a preset is active",
 			position = 20
 	)
 	String presetsSection = "presets";
@@ -267,7 +266,8 @@ public interface BATilesConfig extends Config
 			position = 21,
 			keyName = SHOW_BASE_TILES_WITH_PRESET_KEY_NAME,
 			name = "Show non-preset tiles with a preset",
-			description = "Show tiles that are not part of a strategy preset for a wave / role that has an active preset",
+			description = "Show tiles that are not part of a strategy preset for a wave / role that has an active preset."
+					+ " They are always shown for a wave / role without an active preset.",
 			section = presetsSection
 	)
 	default boolean showBaseTilesWithPreset()
@@ -275,15 +275,4 @@ public interface BATilesConfig extends Config
 		return true;
 	}
 
-	@ConfigItem(
-			position = 22,
-			keyName = SHOW_BASE_TILES_WITHOUT_PRESET_KEY_NAME,
-			name = "Show non-preset tiles without a preset",
-			description = "Show tiles that are not part of a strategy preset for a wave / role that has no active preset",
-			section = presetsSection
-	)
-	default boolean showBaseTilesWithoutPreset()
-	{
-		return true;
-	}
 }
