@@ -33,8 +33,9 @@ For each wave / role combination, you can create any number of named strategy pr
 defender strategies. A preset is a set of tiles that is only shown while that preset is the **active** preset for its
 wave and role. At most one preset is active per wave / role, and "No preset" is always an option.
 
-- Create, rename, delete and select presets in the tile map editor. The active preset can also be switched from the
-  sidebar panel, which follows your current wave and role in game by default.
+- Create, rename, delete and select presets in the tile map editor. Active presets can also be switched from the
+  sidebar panel: pick a role (it follows your current role in game by default) to get a preset selector for each of
+  the 10 waves.
 - In the editor, choose whether you are editing the active preset's tiles or the tiles that are not part of any
   preset; the tiles of the other layer are shown faded.
 - In game, ctrl+right-click a tile and choose **Mark BA Tile (preset name)** to add it to the active preset for your
