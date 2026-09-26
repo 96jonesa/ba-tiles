@@ -46,6 +46,14 @@ wave and role. At most one preset is active per wave / role, and "No preset" is 
 **Export** in the editor copies the active preset and its tiles to the clipboard, and **Import** adds tiles and presets
 from the clipboard.
 
+## Importing BA ground markers
+
+If you have marked BA tiles with RuneLite's Ground Markers plugin, click **Import BA ground markers** in the BA Tiles
+sidebar panel to turn them into BA Tiles in one click. Every ground marker in the arena (waves 1-9 and wave 10)
+becomes a BA Tile shown on all waves for all roles, with the same color and label. Ground markers that already have
+such a BA Tile are skipped, so importing again adds nothing. Your ground markers are left as they are; remove them (or
+turn off Ground Markers) so they are not drawn twice.
+
 ## Copying and pasting BA Tiles
 
 A BA Tile can be copied, then pasted to a tile to create a BA Tile marker on that tile with the same
