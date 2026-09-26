@@ -15,7 +15,9 @@ import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.widgets.InterfaceID;
 import net.runelite.client.callback.ClientThread;
+import com.google.gson.Gson;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.config.ProfileManager;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
@@ -90,6 +92,12 @@ public class BATilesPlugin extends Plugin {
 
 	@Inject
 	private ClientToolbar clientToolbar;
+
+	@Inject
+	private ProfileManager profileManager;
+
+	@Inject
+	private Gson gson;
 
 	private final Runnable storeListener = () -> clientThread.invokeLater(this::loadPoints);
 	private BATilesPanel panel;
@@ -286,7 +294,8 @@ public class BATilesPlugin extends Plugin {
 	{
 		if (importDialog == null)
 		{
-			importDialog = new GroundMarkerImportDialog(SwingUtilities.getWindowAncestor(panel), store);
+			importDialog = new GroundMarkerImportDialog(SwingUtilities.getWindowAncestor(panel), store,
+					() -> ProfileGroundMarkers.otherProfiles(profileManager), gson);
 		}
 		return importDialog;
 	}
