@@ -64,6 +64,14 @@ final class GroundMarkerImport
 		return added;
 	}
 
+	/**
+	 * @return whether the marker already has its BA Tile among {@code existing}, i.e. converting it would add nothing
+	 */
+	static boolean isConverted(GroundMarkerPoint marker, Collection<GroundMarkerPoint> existing)
+	{
+		return toBaTiles(List.of(marker), existing).isEmpty();
+	}
+
 	private static boolean isSameMarker(GroundMarkerPoint a, GroundMarkerPoint b)
 	{
 		return !a.isPresetTile()

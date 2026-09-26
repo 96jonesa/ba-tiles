@@ -13,7 +13,6 @@ import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
-import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import net.runelite.client.ui.ColorScheme;
@@ -29,6 +28,7 @@ class BATilesPanel extends PluginPanel
 
 	private final BATilesStore store;
 	private final Supplier<TileMapEditor> editor;
+	private final Supplier<GroundMarkerImportDialog> importDialog;
 	private final Runnable storeListener = () -> SwingUtilities.invokeLater(this::refresh);
 
 	private final JComboBox<BARole> roleCombo = new JComboBox<>(BARole.values());
@@ -38,10 +38,11 @@ class BATilesPanel extends PluginPanel
 	private int currentWave = 1;
 	private boolean refreshing;
 
-	BATilesPanel(BATilesStore store, Supplier<TileMapEditor> editor)
+	BATilesPanel(BATilesStore store, Supplier<TileMapEditor> editor, Supplier<GroundMarkerImportDialog> importDialog)
 	{
 		this.store = store;
 		this.editor = editor;
+		this.importDialog = importDialog;
 
 		setLayout(new BorderLayout());
 		setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
@@ -57,8 +58,8 @@ class BATilesPanel extends PluginPanel
 		top.add(openEditor);
 
 		JButton importGroundMarkers = new JButton("Import BA ground markers");
-		importGroundMarkers.setToolTipText("Add a BA Tile, shown on all waves for all roles, for each Ground Markers marker in the arena");
-		importGroundMarkers.addActionListener(e -> importGroundMarkers());
+		importGroundMarkers.setToolTipText("Convert Ground Markers markers in the arena into BA Tiles");
+		importGroundMarkers.addActionListener(e -> importDialog.get().open());
 		top.add(importGroundMarkers);
 
 		top.add(new JLabel("Active strategy presets"));
@@ -144,18 +145,6 @@ class BATilesPanel extends PluginPanel
 		header.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
 		header.setToolTipText(tooltip);
 		return header;
-	}
-
-	private void importGroundMarkers()
-	{
-		int added = store.importArenaGroundMarkers();
-		String message = added == 0
-				? "No new ground markers to import from the BA arena (waves 1-9 and 10)."
-				: "Imported " + added + " ground marker" + (added == 1 ? "" : "s") + " from the BA arena as BA Tiles,"
-					+ " shown on all waves for all roles.<br><br>Your ground markers were left as they are; you may want to"
-					+ " remove them (or turn off Ground Markers) so they are not drawn twice.";
-		JOptionPane.showMessageDialog(this, "<html><div style='width:220px'>" + message + "</div></html>",
-				"Import BA ground markers", JOptionPane.INFORMATION_MESSAGE);
 	}
 
 	private String role()

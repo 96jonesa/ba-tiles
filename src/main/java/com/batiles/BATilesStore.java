@@ -318,25 +318,28 @@ class BATilesStore
 	// ---- ground markers ----
 
 	/**
-	 * Adds a BA Tile, shown on all waves for all roles, for every Ground Markers plugin marker in the arena
-	 * (waves 1-9 and wave 10) that does not already have one. The ground markers themselves are left untouched.
+	 * @return the Ground Markers plugin's markers stored for the region
+	 */
+	List<GroundMarkerPoint> getGroundMarkers(int regionId)
+	{
+		String json = configManager.getConfiguration(GroundMarkerImport.GROUND_MARKER_CONFIG_GROUP, REGION_PREFIX + regionId);
+		return Strings.isNullOrEmpty(json) ? Collections.emptyList() : GroundMarkerImport.parse(gson, json);
+	}
+
+	/**
+	 * Adds a BA Tile, shown on all waves for all roles, for each of the given Ground Markers markers that does not
+	 * already have one. The ground markers themselves are left untouched.
 	 *
 	 * @return the number of BA Tiles added
 	 */
-	int importArenaGroundMarkers()
+	int convertGroundMarkers(Collection<GroundMarkerPoint> markers)
 	{
 		int added = 0;
-		for (int regionId : ArenaMapLayout.REGION_IDS)
+		for (int regionId : markers.stream().map(GroundMarkerPoint::getRegionId).distinct().collect(Collectors.toList()))
 		{
-			String json = configManager.getConfiguration(GroundMarkerImport.GROUND_MARKER_CONFIG_GROUP, REGION_PREFIX + regionId);
-			if (Strings.isNullOrEmpty(json))
-			{
-				continue;
-			}
-
-			List<GroundMarkerPoint> markers = GroundMarkerImport.parse(gson, json);
 			List<GroundMarkerPoint> points = new ArrayList<>(getPoints(regionId));
-			List<GroundMarkerPoint> tiles = GroundMarkerImport.toBaTiles(markers, points);
+			List<GroundMarkerPoint> tiles = GroundMarkerImport.toBaTiles(
+					markers.stream().filter(m -> m.getRegionId() == regionId).collect(Collectors.toList()), points);
 			if (!tiles.isEmpty())
 			{
 				points.addAll(tiles);

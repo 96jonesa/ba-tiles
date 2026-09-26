@@ -49,10 +49,13 @@ from the clipboard.
 ## Importing BA ground markers
 
 If you have marked BA tiles with RuneLite's Ground Markers plugin, click **Import BA ground markers** in the BA Tiles
-sidebar panel to turn them into BA Tiles in one click. Every ground marker in the arena (waves 1-9 and wave 10)
-becomes a BA Tile shown on all waves for all roles, with the same color and label. Ground markers that already have
-such a BA Tile are skipped, so importing again adds nothing. Your ground markers are left as they are; remove them (or
-turn off Ground Markers) so they are not drawn twice.
+sidebar panel. A pop-up shows your ground markers on the arena map, for waves 1-9 and for wave 10, with a count of how
+many are on each map and how many are not yet BA Tiles. Ground markers that already have their BA Tile are shown faded.
+
+- Click markers to select them, then **Convert selected**, or use **Convert all new on both maps**.
+- Each converted marker becomes a BA Tile shown on all waves for all roles, with the same color and label.
+- Converting again adds nothing for markers that already have their BA Tile.
+- Your ground markers are left as they are; remove them (or turn off Ground Markers) so they are not drawn twice.
 
 ## Copying and pasting BA Tiles
 

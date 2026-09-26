@@ -95,6 +95,7 @@ public class BATilesPlugin extends Plugin {
 	private BATilesPanel panel;
 	private NavigationButton navigationButton;
 	private TileMapEditor editor;
+	private GroundMarkerImportDialog importDialog;
 
 	private int currentWave = START_WAVE;
 	private String currentRole = "a";
@@ -255,7 +256,7 @@ public class BATilesPlugin extends Plugin {
 		clientThread.invokeLater(this::loadPoints);
 		eventBus.register(sharingManager);
 
-		panel = new BATilesPanel(store, this::getEditor);
+		panel = new BATilesPanel(store, this::getEditor, this::getImportDialog);
 		navigationButton = NavigationButton.builder()
 				.tooltip("BA Tiles")
 				.icon(panelIcon())
@@ -276,6 +277,18 @@ public class BATilesPlugin extends Plugin {
 					sharingManager);
 		}
 		return editor;
+	}
+
+	/**
+	 * The ground marker import pop-up, created on first use. Must be called on the Swing event thread.
+	 */
+	private GroundMarkerImportDialog getImportDialog()
+	{
+		if (importDialog == null)
+		{
+			importDialog = new GroundMarkerImportDialog(SwingUtilities.getWindowAncestor(panel), store);
+		}
+		return importDialog;
 	}
 
 	private static BufferedImage panelIcon()
@@ -307,6 +320,12 @@ public class BATilesPlugin extends Plugin {
 		if (openEditor != null)
 		{
 			SwingUtilities.invokeLater(openEditor::dispose);
+		}
+		GroundMarkerImportDialog openImportDialog = importDialog;
+		importDialog = null;
+		if (openImportDialog != null)
+		{
+			SwingUtilities.invokeLater(openImportDialog::dispose);
 		}
 		overlayManager.remove(overlay);
 		sharingManager.removeMenuOptions();

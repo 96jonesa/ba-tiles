@@ -39,6 +39,17 @@ public class GroundMarkerImportTest
 		}
 	}
 
+	public static class IsConverted
+	{
+		@Test
+		public void trueOnlyOnceTheMarkerHasItsBaTile()
+		{
+			assertEquals(false, GroundMarkerImport.isConverted(MARKER, List.of()));
+			assertEquals(true, GroundMarkerImport.isConverted(MARKER, List.of(IMPORTED)));
+			assertEquals(false, GroundMarkerImport.isConverted(MARKER, List.of(IMPORTED.withWaves(List.of(3)))));
+		}
+	}
+
 	public static class ToBaTiles
 	{
 		@Test
