@@ -50,6 +50,26 @@ public class GroundMarkerImportTest
 		}
 	}
 
+	public static class OverlapsOtherTile
+	{
+		@Test
+		public void trueWhenTheTileHasADifferentBaTile()
+		{
+			assertEquals(true, GroundMarkerImport.overlapsOtherTile(MARKER, List.of(IMPORTED.withColor(Color.BLUE))));
+			assertEquals(true, GroundMarkerImport.overlapsOtherTile(MARKER, List.of(IMPORTED.withLabel("other"))));
+			assertEquals(true, GroundMarkerImport.overlapsOtherTile(MARKER, List.of(IMPORTED.withWaves(List.of(3)))));
+			assertEquals(true, GroundMarkerImport.overlapsOtherTile(MARKER, List.of(IMPORTED.withPresetId("p1"))));
+		}
+
+		@Test
+		public void falseForAnEmptyTileOrAnAlreadyConvertedMarker()
+		{
+			assertEquals(false, GroundMarkerImport.overlapsOtherTile(MARKER, List.of()));
+			assertEquals(false, GroundMarkerImport.overlapsOtherTile(MARKER, List.of(IMPORTED.withRegionX(31))));
+			assertEquals(false, GroundMarkerImport.overlapsOtherTile(MARKER, List.of(IMPORTED, IMPORTED.withColor(Color.BLUE))));
+		}
+	}
+
 	public static class ToBaTiles
 	{
 		@Test

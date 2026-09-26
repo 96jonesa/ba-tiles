@@ -72,6 +72,16 @@ final class GroundMarkerImport
 		return toBaTiles(List.of(marker), existing).isEmpty();
 	}
 
+	/**
+	 * @return whether the marker is not yet converted but its tile already has some other BA Tile (e.g. with a
+	 *         different color, label, waves or roles, or in a preset), so that converting it would stack two markers
+	 */
+	static boolean overlapsOtherTile(GroundMarkerPoint marker, Collection<GroundMarkerPoint> existing)
+	{
+		return !isConverted(marker, existing)
+				&& existing.stream().anyMatch(t -> t.isAt(marker.getRegionId(), marker.getRegionX(), marker.getRegionY(), marker.getZ()));
+	}
+
 	private static boolean isSameMarker(GroundMarkerPoint a, GroundMarkerPoint b)
 	{
 		return !a.isPresetTile()

@@ -33,6 +33,7 @@ class GroundMarkerImportDialog extends JDialog
 	private static final int MIN_TILE_SIZE = 8;
 	private static final int MAX_TILE_SIZE = 40;
 	private static final int DEFAULT_TILE_SIZE = 16;
+	private static final String FLAG_HEX = String.format("#%06x", ArenaMapPanel.FLAG_COLOR.getRGB() & 0xffffff);
 
 	private final BATilesStore store;
 	private final Runnable storeListener = () -> SwingUtilities.invokeLater(this::refresh);
@@ -85,7 +86,9 @@ class GroundMarkerImportDialog extends JDialog
 
 		JLabel help = new JLabel("<html>Ground markers are converted into BA Tiles shown on <b>all waves for all roles</b>,"
 				+ " with the same color and label. <b>Click</b> a marker to select or deselect it. Faded markers already have"
-				+ " their BA Tile. Your ground markers are left as they are.</html>");
+				+ " their BA Tile. Markers with an <font color='" + FLAG_HEX + "'>orange corner</font> are on a tile that"
+				+ " already has a different BA Tile (another color, label, waves or roles), so converting them would stack"
+				+ " two markers there. Your ground markers are left as they are.</html>");
 		help.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
 
 		JPanel top = new JPanel();
@@ -125,7 +128,7 @@ class GroundMarkerImportDialog extends JDialog
 			selected.clear();
 			refresh();
 		});
-		convertSelectedButton.addActionListener(e -> convert(new ArrayList<>(selected)));
+		convertSelectedButton.addActionListener(e -> confirmAndConvert(new ArrayList<>(selected)));
 		convertAllButton.addActionListener(e -> convertAll());
 
 		setSize(1000, 800);
@@ -163,7 +166,8 @@ class GroundMarkerImportDialog extends JDialog
 			if (layout.contains(marker))
 			{
 				boolean converted = GroundMarkerImport.isConverted(marker, tiles);
-				mapMarkers.add(new ArenaMapPanel.MapMarker(marker, converted, selected.contains(marker)));
+				mapMarkers.add(new ArenaMapPanel.MapMarker(marker, converted, selected.contains(marker),
+						GroundMarkerImport.overlapsOtherTile(marker, tiles)));
 			}
 		}
 		return mapMarkers;
@@ -184,7 +188,9 @@ class GroundMarkerImportDialog extends JDialog
 		{
 			List<GroundMarkerPoint> m = l == layout ? markers : store.getGroundMarkers(l.getRegionId());
 			List<GroundMarkerPoint> t = l == layout ? tiles : store.getPoints(l.getRegionId());
-			int fresh = unconverted(m, t).size();
+			List<GroundMarkerPoint> freshMarkers = unconverted(m, t);
+			int fresh = freshMarkers.size();
+			long overlapping = freshMarkers.stream().filter(g -> GroundMarkerImport.overlapsOtherTile(g, t)).count();
 			allNew += fresh;
 			if (text.length() > "<html>".length())
 			{
@@ -192,6 +198,11 @@ class GroundMarkerImportDialog extends JDialog
 			}
 			text.append("<b>").append(l.getDisplayName()).append(":</b> ").append(m.size()).append(" ground marker")
 					.append(m.size() == 1 ? "" : "s").append(", ").append(fresh).append(" not yet BA Tiles");
+			if (overlapping > 0)
+			{
+				text.append(" (<font color='").append(FLAG_HEX).append("'>").append(overlapping)
+						.append(" on a tile that already has a BA Tile</font>)");
+			}
 		}
 		summary.setText(text.append("</html>").toString());
 
@@ -232,14 +243,6 @@ class GroundMarkerImportDialog extends JDialog
 		refresh();
 	}
 
-	private void convert(List<GroundMarkerPoint> toConvert)
-	{
-		int added = store.convertGroundMarkers(toConvert);
-		selected.clear();
-		refresh();
-		showResult(added);
-	}
-
 	private void convertAll()
 	{
 		List<GroundMarkerPoint> all = new ArrayList<>();
@@ -247,15 +250,81 @@ class GroundMarkerImportDialog extends JDialog
 		{
 			all.addAll(unconverted(store.getGroundMarkers(layout.getRegionId()), store.getPoints(layout.getRegionId())));
 		}
+		confirmAndConvert(all);
+	}
 
-		int result = JOptionPane.showConfirmDialog(this,
-				"Convert " + all.size() + " ground marker" + (all.size() == 1 ? "" : "s")
-						+ " into BA Tiles shown on all waves for all roles?",
-				"Import BA ground markers", JOptionPane.OK_CANCEL_OPTION);
-		if (result == JOptionPane.OK_OPTION)
+	/**
+	 * Asks for confirmation, offering to skip markers on tiles that already have a different BA Tile, then converts.
+	 */
+	private void confirmAndConvert(List<GroundMarkerPoint> toConvert)
+	{
+		List<GroundMarkerPoint> clean = new ArrayList<>();
+		for (GroundMarkerPoint marker : toConvert)
 		{
-			convert(all);
+			if (!GroundMarkerImport.overlapsOtherTile(marker, store.getPoints(marker.getRegionId())))
+			{
+				clean.add(marker);
+			}
 		}
+		int overlapping = toConvert.size() - clean.size();
+
+		String what = "Convert " + plural(toConvert.size(), "ground marker") + " into BA Tiles shown on all waves for all roles?";
+		if (overlapping == 0)
+		{
+			int result = JOptionPane.showConfirmDialog(this, what, "Import BA ground markers", JOptionPane.OK_CANCEL_OPTION);
+			if (result == JOptionPane.OK_OPTION)
+			{
+				convert(toConvert);
+			}
+			return;
+		}
+
+		String message = "<html><div style='width:300px'>" + what + "<br><br><font color='" + FLAG_HEX + "'>"
+				+ plural(overlapping, "of them is", "of them are") + " on a tile that already has a different BA Tile.</font>"
+				+ " Converting " + (overlapping == 1 ? "it" : "them") + " stacks a second marker on that tile.</div></html>";
+		List<String> options = new ArrayList<>();
+		String convertEverything = "Convert all " + toConvert.size();
+		String skipOverlapping = "Skip overlapping, convert " + clean.size();
+		options.add(convertEverything);
+		if (!clean.isEmpty())
+		{
+			options.add(skipOverlapping);
+		}
+		options.add("Cancel");
+
+		int choice = JOptionPane.showOptionDialog(this, message, "Import BA ground markers", JOptionPane.DEFAULT_OPTION,
+				JOptionPane.WARNING_MESSAGE, null, options.toArray(), clean.isEmpty() ? convertEverything : skipOverlapping);
+		if (choice < 0)
+		{
+			return;
+		}
+		String picked = options.get(choice);
+		if (picked.equals(convertEverything))
+		{
+			convert(toConvert);
+		}
+		else if (picked.equals(skipOverlapping))
+		{
+			convert(clean);
+		}
+	}
+
+	private static String plural(int count, String noun)
+	{
+		return count + " " + noun + (count == 1 ? "" : "s");
+	}
+
+	private static String plural(int count, String singular, String pluralForm)
+	{
+		return count + " " + (count == 1 ? singular : pluralForm);
+	}
+
+	private void convert(List<GroundMarkerPoint> toConvert)
+	{
+		int added = store.convertGroundMarkers(toConvert);
+		selected.clear();
+		refresh();
+		showResult(added);
 	}
 
 	private void showResult(int added)
