@@ -47,8 +47,8 @@ import java.util.stream.Collectors;
 )
 public class BATilesPlugin extends Plugin {
 	private static final String WALK_HERE = "Walk here";
-	private static final List<Integer> ALL_WAVES = List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
-	private static final List<String> ALL_ROLES = List.of("a", "c", "d", "h");
+	static final List<Integer> ALL_WAVES = List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+	static final List<String> ALL_ROLES = List.of("a", "c", "d", "h");
 	private static final int BA_WAVE_NUM_INDEX = 2;
 	private static final int START_WAVE = 1;
 

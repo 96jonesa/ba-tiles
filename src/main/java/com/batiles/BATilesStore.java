@@ -314,4 +314,41 @@ class BATilesStore
 		}
 		fireChanged();
 	}
+
+	// ---- ground markers ----
+
+	/**
+	 * Adds a BA Tile, shown on all waves for all roles, for every Ground Markers plugin marker in the arena
+	 * (waves 1-9 and wave 10) that does not already have one. The ground markers themselves are left untouched.
+	 *
+	 * @return the number of BA Tiles added
+	 */
+	int importArenaGroundMarkers()
+	{
+		int added = 0;
+		for (int regionId : ArenaMapLayout.REGION_IDS)
+		{
+			String json = configManager.getConfiguration(GroundMarkerImport.GROUND_MARKER_CONFIG_GROUP, REGION_PREFIX + regionId);
+			if (Strings.isNullOrEmpty(json))
+			{
+				continue;
+			}
+
+			List<GroundMarkerPoint> markers = GroundMarkerImport.parse(gson, json);
+			List<GroundMarkerPoint> points = new ArrayList<>(getPoints(regionId));
+			List<GroundMarkerPoint> tiles = GroundMarkerImport.toBaTiles(markers, points);
+			if (!tiles.isEmpty())
+			{
+				points.addAll(tiles);
+				writePoints(regionId, points);
+				added += tiles.size();
+			}
+		}
+
+		if (added > 0)
+		{
+			fireChanged();
+		}
+		return added;
+	}
 }
