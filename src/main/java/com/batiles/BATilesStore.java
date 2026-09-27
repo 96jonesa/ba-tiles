@@ -497,6 +497,21 @@ class BATilesStore
 		return lineup;
 	}
 
+	/**
+	 * Stores the lineup, keeping its id, unless a lineup with that id already exists.
+	 */
+	void addLineupIfAbsent(Lineup lineup)
+	{
+		if (getLineup(lineup.getId()).isPresent())
+		{
+			return;
+		}
+		List<Lineup> lineups = new ArrayList<>(getLineups());
+		lineups.add(lineup);
+		saveLineups(lineups);
+		fireChanged();
+	}
+
 	void renameLineup(Lineup lineup, String name)
 	{
 		saveLineups(getLineups().stream()
@@ -568,5 +583,16 @@ class BATilesStore
 		Map<Integer, String> kept = new TreeMap<>(presetIds);
 		kept.values().removeIf(presetId::equals);
 		return kept;
+	}
+
+	// ---- BA Utilities ----
+
+	/**
+	 * @return BA Utilities' saved tile setup on the current profile (its raw JSON), or null if it has none
+	 */
+	@Nullable
+	String getBaUtilitiesSetupJson()
+	{
+		return Strings.emptyToNull(config.get(BaUtilitiesData.CONFIG_GROUP, BaUtilitiesData.STORE_KEY));
 	}
 }

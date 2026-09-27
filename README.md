@@ -81,6 +81,25 @@ color, label, waves, and roles.
 
 The plugin config allows the user to toggle which wave and role BA Tiles are currently visible.
 
+## Moving over from BA Utilities
+
+BA Utilities' tile markers are moving to BA Tiles. **Import from BA Utilities** in the sidebar panel reads BA Utilities'
+tile setup (from this profile, or another of your RuneLite profiles; it is only read, never changed) and shows what
+it will import before doing anything:
+
+- Each BA Utilities **strategy**, including its built-in ones, becomes a BA Tiles strategy preset on every wave and role
+  you tick, holding the tiles of its sets with their colors, labels, fill opacity and border width. Your own strategies
+  start out ticked for every wave of their arena map (waves 1-9, or wave 10) and every role; built-in ones for
+  Defender only.
+- Each **assignment preset** becomes a lineup, and so does each role's current setup when it is not one of them. A
+  GLOBAL (all roles) assignment preset becomes a lineup for each role. You can switch each role to its BA Utilities
+  setup right away.
+- **GLOBAL** (all roles) selections become tiles that are not part of a preset, shown for all roles on their waves, with
+  **Others** turned on for those waves so they also show alongside presets.
+- **Strategy notes are not imported**; BA Tiles has no notes.
+- Names already used on a wave and role (or by a lineup for that role) must be renamed before importing.
+- Nothing already in BA Tiles is removed, and importing again skips what an earlier import created.
+
 ## Backing up and restoring everything
 
 **Export all** in the BA Tiles sidebar panel copies *everything* BA Tiles stores on the current profile to the
