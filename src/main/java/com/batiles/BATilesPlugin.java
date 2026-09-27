@@ -264,7 +264,7 @@ public class BATilesPlugin extends Plugin {
 		clientThread.invokeLater(this::loadPoints);
 		eventBus.register(sharingManager);
 
-		panel = new BATilesPanel(store, this::getEditor, this::getImportDialog);
+		panel = new BATilesPanel(store, this::getEditor, this::getImportDialog, gson);
 		navigationButton = NavigationButton.builder()
 				.tooltip("BA Tiles")
 				.icon(panelIcon())

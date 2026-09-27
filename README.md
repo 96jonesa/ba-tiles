@@ -69,6 +69,14 @@ color, label, waves, and roles.
 
 The plugin config allows the user to toggle which wave and role BA Tiles are currently visible.
 
+## Backing up and restoring everything
+
+**Export all** in the BA Tiles sidebar panel copies *everything* BA Tiles stores on the current profile to the
+clipboard: tiles in every region, strategy presets, which presets are active, the per-wave settings, and the plugin's
+options. **Import all** restores such a backup from the clipboard, **replacing** everything BA Tiles has stored on the
+current profile. It asks first, showing what the backup contains and what will be replaced. Use it to move your whole
+setup to another profile or computer.
+
 ## Toggling BA Tile visibility by wave and role
 
 For waves, each of the following can be toggled: current wave, 1, 2, 3, 4, 5, 6, 7, 8, 9, 10).
