@@ -28,6 +28,7 @@ class BATilesPanel extends PluginPanel
 
 	private final BATilesStore store;
 	private final Supplier<TileMapEditor> editor;
+	private final Supplier<GroundMarkerImportDialog> importDialog;
 	private final Runnable storeListener = () -> SwingUtilities.invokeLater(this::refresh);
 
 	private final JComboBox<BARole> roleCombo = new JComboBox<>(BARole.values());
@@ -37,10 +38,11 @@ class BATilesPanel extends PluginPanel
 	private int currentWave = 1;
 	private boolean refreshing;
 
-	BATilesPanel(BATilesStore store, Supplier<TileMapEditor> editor)
+	BATilesPanel(BATilesStore store, Supplier<TileMapEditor> editor, Supplier<GroundMarkerImportDialog> importDialog)
 	{
 		this.store = store;
 		this.editor = editor;
+		this.importDialog = importDialog;
 
 		setLayout(new BorderLayout());
 		setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
@@ -54,6 +56,11 @@ class BATilesPanel extends PluginPanel
 		JButton openEditor = new JButton("Open tile map editor");
 		openEditor.addActionListener(e -> editor.get().open(currentWave, role()));
 		top.add(openEditor);
+
+		JButton importGroundMarkers = new JButton("Import BA ground markers");
+		importGroundMarkers.setToolTipText("Convert Ground Markers markers in the arena into BA Tiles");
+		importGroundMarkers.addActionListener(e -> importDialog.get().open());
+		top.add(importGroundMarkers);
 
 		top.add(new JLabel("Active strategy presets"));
 		top.add(roleCombo);

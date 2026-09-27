@@ -15,7 +15,9 @@ import net.runelite.api.events.MenuEntryAdded;
 import net.runelite.api.events.WidgetLoaded;
 import net.runelite.api.widgets.InterfaceID;
 import net.runelite.client.callback.ClientThread;
+import com.google.gson.Gson;
 import net.runelite.client.config.ConfigManager;
+import net.runelite.client.config.ProfileManager;
 import net.runelite.client.eventbus.EventBus;
 import net.runelite.client.eventbus.Subscribe;
 import net.runelite.client.events.ConfigChanged;
@@ -47,8 +49,8 @@ import java.util.stream.Collectors;
 )
 public class BATilesPlugin extends Plugin {
 	private static final String WALK_HERE = "Walk here";
-	private static final List<Integer> ALL_WAVES = List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
-	private static final List<String> ALL_ROLES = List.of("a", "c", "d", "h");
+	static final List<Integer> ALL_WAVES = List.of(1, 2, 3, 4, 5, 6, 7, 8, 9, 10);
+	static final List<String> ALL_ROLES = List.of("a", "c", "d", "h");
 	private static final int BA_WAVE_NUM_INDEX = 2;
 	private static final int START_WAVE = 1;
 
@@ -91,10 +93,17 @@ public class BATilesPlugin extends Plugin {
 	@Inject
 	private ClientToolbar clientToolbar;
 
+	@Inject
+	private ProfileManager profileManager;
+
+	@Inject
+	private Gson gson;
+
 	private final Runnable storeListener = () -> clientThread.invokeLater(this::loadPoints);
 	private BATilesPanel panel;
 	private NavigationButton navigationButton;
 	private TileMapEditor editor;
+	private GroundMarkerImportDialog importDialog;
 
 	private int currentWave = START_WAVE;
 	private String currentRole = "a";
@@ -255,7 +264,7 @@ public class BATilesPlugin extends Plugin {
 		clientThread.invokeLater(this::loadPoints);
 		eventBus.register(sharingManager);
 
-		panel = new BATilesPanel(store, this::getEditor);
+		panel = new BATilesPanel(store, this::getEditor, this::getImportDialog);
 		navigationButton = NavigationButton.builder()
 				.tooltip("BA Tiles")
 				.icon(panelIcon())
@@ -276,6 +285,19 @@ public class BATilesPlugin extends Plugin {
 					sharingManager);
 		}
 		return editor;
+	}
+
+	/**
+	 * The ground marker import pop-up, created on first use. Must be called on the Swing event thread.
+	 */
+	private GroundMarkerImportDialog getImportDialog()
+	{
+		if (importDialog == null)
+		{
+			importDialog = new GroundMarkerImportDialog(SwingUtilities.getWindowAncestor(panel), store,
+					() -> ProfileGroundMarkers.otherProfiles(profileManager), gson);
+		}
+		return importDialog;
 	}
 
 	private static BufferedImage panelIcon()
@@ -307,6 +329,12 @@ public class BATilesPlugin extends Plugin {
 		if (openEditor != null)
 		{
 			SwingUtilities.invokeLater(openEditor::dispose);
+		}
+		GroundMarkerImportDialog openImportDialog = importDialog;
+		importDialog = null;
+		if (openImportDialog != null)
+		{
+			SwingUtilities.invokeLater(openImportDialog::dispose);
 		}
 		overlayManager.remove(overlay);
 		sharingManager.removeMenuOptions();

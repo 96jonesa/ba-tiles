@@ -314,4 +314,44 @@ class BATilesStore
 		}
 		fireChanged();
 	}
+
+	// ---- ground markers ----
+
+	/**
+	 * @return the Ground Markers plugin's markers stored for the region
+	 */
+	List<GroundMarkerPoint> getGroundMarkers(int regionId)
+	{
+		String json = configManager.getConfiguration(GroundMarkerImport.GROUND_MARKER_CONFIG_GROUP, REGION_PREFIX + regionId);
+		return Strings.isNullOrEmpty(json) ? Collections.emptyList() : GroundMarkerImport.parse(gson, json);
+	}
+
+	/**
+	 * Adds a BA Tile, shown on all waves for all roles, for each of the given Ground Markers markers that does not
+	 * already have one. The ground markers themselves are left untouched.
+	 *
+	 * @return the number of BA Tiles added
+	 */
+	int convertGroundMarkers(Collection<GroundMarkerPoint> markers)
+	{
+		int added = 0;
+		for (int regionId : markers.stream().map(GroundMarkerPoint::getRegionId).distinct().collect(Collectors.toList()))
+		{
+			List<GroundMarkerPoint> points = new ArrayList<>(getPoints(regionId));
+			List<GroundMarkerPoint> tiles = GroundMarkerImport.toBaTiles(
+					markers.stream().filter(m -> m.getRegionId() == regionId).collect(Collectors.toList()), points);
+			if (!tiles.isEmpty())
+			{
+				points.addAll(tiles);
+				writePoints(regionId, points);
+				added += tiles.size();
+			}
+		}
+
+		if (added > 0)
+		{
+			fireChanged();
+		}
+		return added;
+	}
 }

@@ -61,6 +61,7 @@ class ArenaMapPanel extends JPanel
 	static final Color START_TILE_COLOR = new Color(115, 190, 205);
 	private static final Color SELECTED_MARKER_BORDER_COLOR = new Color(0, 175, 255);
 	private static final Color DEFAULT_MARKER_COLOR = Color.YELLOW;
+	static final Color FLAG_COLOR = new Color(255, 140, 0);
 	private static final int FILL_ALPHA = 110;
 	private static final int DIMMED_FILL_ALPHA = 35;
 	private static final int DIMMED_BORDER_ALPHA = 110;
@@ -218,8 +219,22 @@ class ArenaMapPanel extends JPanel
 				{
 					drawMarkerBorder(graphics, x, y, SELECTED_MARKER_BORDER_COLOR, selectedMarkerBorderWidth());
 				}
+
+				if (marker.isFlagged())
+				{
+					drawFlag(graphics, x, y);
+				}
 			}
 		}
+	}
+
+	private void drawFlag(Graphics graphics, int x, int y)
+	{
+		// a triangle in the tile's top-right corner
+		int size = Math.max(5, getTileSize() / 2);
+		int right = x + getTileSize();
+		graphics.setColor(FLAG_COLOR);
+		graphics.fillPolygon(new int[]{right - size, right, right}, new int[]{y, y, y + size}, 3);
 	}
 
 	private float selectedMarkerBorderWidth()
@@ -615,5 +630,22 @@ class ArenaMapPanel extends JPanel
 		GroundMarkerPoint point;
 		boolean dimmed;
 		boolean selected;
+		/**
+		 * Draws a warning corner on the marker, e.g. for a ground marker on a tile that already has a BA Tile.
+		 */
+		boolean flagged;
+
+		MapMarker(GroundMarkerPoint point, boolean dimmed, boolean selected)
+		{
+			this(point, dimmed, selected, false);
+		}
+
+		MapMarker(GroundMarkerPoint point, boolean dimmed, boolean selected, boolean flagged)
+		{
+			this.point = point;
+			this.dimmed = dimmed;
+			this.selected = selected;
+			this.flagged = flagged;
+		}
 	}
 }
