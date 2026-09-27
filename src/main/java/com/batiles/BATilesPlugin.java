@@ -148,6 +148,10 @@ public class BATilesPlugin extends Plugin {
 			Collection<ColorTileMarker> colorTileMarkers = translateToColorTileMarker(pointsToLoad);
 			points.addAll(colorTileMarkers);
 		}
+
+		List<ColorTileMarker> distinct = ColorTileMarker.withoutDuplicates(points);
+		points.clear();
+		points.addAll(distinct);
 	}
 
 	List<Integer> wavesToDisplay() {

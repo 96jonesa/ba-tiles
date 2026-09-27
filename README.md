@@ -24,6 +24,8 @@ sidebar panel and click **Open tile map editor** to open the editor in a pop-up 
 - By default a tile is drawn like any BA Tile: an outline in its color, filled black at the plugin's **Fill Opacity**,
   with the plugin's **Border Width**. In the editor, a tile can instead be **filled with its own color** at an opacity
   you choose, and can have its **own border width**.
+- If several BA Tiles shown at the same time on one tile look exactly the same (same color, label, fill and border
+  width), only one is drawn. Tiles that differ in any way are all drawn, on top of each other.
 - **Add another marker here** puts a second marker on the same tile, e.g. with a different label for another wave.
 - The map shows the arena's landmarks (cannons, traps, caves, dispensers, logs, hammer, start tiles, and the
   queen's trapdoor on wave 10), and can be zoomed or narrowed to the east side of the arena.
