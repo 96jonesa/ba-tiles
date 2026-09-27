@@ -104,6 +104,7 @@ public class BATilesPlugin extends Plugin {
 	private NavigationButton navigationButton;
 	private TileMapEditor editor;
 	private GroundMarkerImportDialog importDialog;
+	private BaUtilitiesImportDialog baUtilitiesDialog;
 
 	private int currentWave = START_WAVE;
 	private String currentRole = "a";
@@ -269,7 +270,7 @@ public class BATilesPlugin extends Plugin {
 		clientThread.invokeLater(this::loadPoints);
 		eventBus.register(sharingManager);
 
-		panel = new BATilesPanel(store, this::getEditor, this::getImportDialog, gson);
+		panel = new BATilesPanel(store, this::getEditor, this::getImportDialog, this::getBaUtilitiesDialog, gson);
 		navigationButton = NavigationButton.builder()
 				.tooltip("BA Tiles")
 				.icon(panelIcon())
@@ -303,6 +304,19 @@ public class BATilesPlugin extends Plugin {
 					() -> ProfileGroundMarkers.otherProfiles(profileManager), gson);
 		}
 		return importDialog;
+	}
+
+	/**
+	 * The BA Utilities import pop-up, created on first use. Must be called on the Swing event thread.
+	 */
+	private BaUtilitiesImportDialog getBaUtilitiesDialog()
+	{
+		if (baUtilitiesDialog == null)
+		{
+			baUtilitiesDialog = new BaUtilitiesImportDialog(SwingUtilities.getWindowAncestor(panel), store,
+					() -> ProfileGroundMarkers.otherProfiles(profileManager), gson);
+		}
+		return baUtilitiesDialog;
 	}
 
 	private static BufferedImage panelIcon()
@@ -340,6 +354,12 @@ public class BATilesPlugin extends Plugin {
 		if (openImportDialog != null)
 		{
 			SwingUtilities.invokeLater(openImportDialog::dispose);
+		}
+		BaUtilitiesImportDialog openBaUtilitiesDialog = baUtilitiesDialog;
+		baUtilitiesDialog = null;
+		if (openBaUtilitiesDialog != null)
+		{
+			SwingUtilities.invokeLater(openBaUtilitiesDialog::dispose);
 		}
 		overlayManager.remove(overlay);
 		sharingManager.removeMenuOptions();

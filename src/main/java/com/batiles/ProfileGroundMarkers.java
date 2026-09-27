@@ -75,13 +75,27 @@ final class ProfileGroundMarkers
 	 */
 	static Map<Integer, List<GroundMarkerPoint>> readMarkers(File profileFile, Gson gson, int... regionIds) throws IOException
 	{
+		return readMarkers(load(profileFile), gson, regionIds);
+	}
+
+	/**
+	 * @return BA Utilities' saved tile setup (its raw JSON) in a profile's file, or null if it has none
+	 * @throws IOException if the profile's file cannot be read
+	 */
+	static String readBaUtilitiesSetupJson(File profileFile) throws IOException
+	{
+		return Strings.emptyToNull(load(profileFile).getProperty(BaUtilitiesData.CONFIG_GROUP + "." + BaUtilitiesData.STORE_KEY));
+	}
+
+	private static Properties load(File profileFile) throws IOException
+	{
 		Properties properties = new Properties();
 		// the same encoding RuneLite writes profiles in
 		try (Reader reader = new InputStreamReader(new FileInputStream(profileFile), StandardCharsets.UTF_8))
 		{
 			properties.load(reader);
 		}
-		return readMarkers(properties, gson, regionIds);
+		return properties;
 	}
 
 	static Map<Integer, List<GroundMarkerPoint>> readMarkers(Properties properties, Gson gson, int... regionIds)
