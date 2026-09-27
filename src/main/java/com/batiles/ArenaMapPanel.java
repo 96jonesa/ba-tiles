@@ -271,6 +271,10 @@ class ArenaMapPanel extends JPanel
 	private void drawMarkerBorder(Graphics graphics, int x, int y, Color color, float borderWidth)
 	{
 		float width = borderWidth;
+		if (width <= 0)
+		{
+			return;
+		}
 
 		Graphics2D graphics2D = (Graphics2D) graphics.create();
 		Stroke originalStroke = graphics2D.getStroke();
