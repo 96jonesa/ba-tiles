@@ -206,10 +206,10 @@ class ArenaMapPanel extends JPanel
 				int x = toScreenX(mapX);
 				int y = toScreenY(mapY);
 				Color color = point.getColor() == null ? DEFAULT_MARKER_COLOR : point.getColor();
-				graphics.setColor(withAlpha(color, marker.isDimmed() ? DIMMED_FILL_ALPHA : FILL_ALPHA));
+				graphics.setColor(withAlpha(color, fillAlpha(point, marker.isDimmed())));
 				graphics.fillRect(x, y, getTileSize(), getTileSize());
 				drawMarkerBorder(graphics, x, y, marker.isDimmed() ? withAlpha(color, DIMMED_BORDER_ALPHA) : color,
-						marker.isDimmed() ? 1f : 2f);
+						marker.isDimmed() ? 1f : borderWidth(point));
 				if (!marker.isDimmed())
 				{
 					drawMarkerText(graphics, point, x, y);
@@ -235,6 +235,27 @@ class ArenaMapPanel extends JPanel
 		int right = x + getTileSize();
 		graphics.setColor(FLAG_COLOR);
 		graphics.fillPolygon(new int[]{right - size, right, right}, new int[]{y, y, y + size}, 3);
+	}
+
+	/**
+	 * A tile filled with its own color shows that opacity on the map; other tiles get the map's usual tint.
+	 */
+	private static int fillAlpha(GroundMarkerPoint point, boolean dimmed)
+	{
+		if (point.getFillOpacityPercent() == null)
+		{
+			return dimmed ? DIMMED_FILL_ALPHA : FILL_ALPHA;
+		}
+		int alpha = TileStyle.fill(Color.BLACK, point.getFillOpacityPercent(), 0).getAlpha();
+		return dimmed ? alpha / 3 : alpha;
+	}
+
+	/**
+	 * A tile's own border width, capped so thick borders don't swallow the map's small tiles.
+	 */
+	private float borderWidth(GroundMarkerPoint point)
+	{
+		return point.getBorderWidth() == null ? 2f : Math.min(point.getBorderWidth(), Math.max(1f, getTileSize() / 4f));
 	}
 
 	private float selectedMarkerBorderWidth()

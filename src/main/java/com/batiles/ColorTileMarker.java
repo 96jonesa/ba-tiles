@@ -17,4 +17,14 @@ class ColorTileMarker
     private Color color;
     @Nullable
     private String label;
+    /**
+     * See {@link GroundMarkerPoint#getFillOpacityPercent()}.
+     */
+    @Nullable
+    private Integer fillOpacityPercent;
+    /**
+     * See {@link GroundMarkerPoint#getBorderWidth()}.
+     */
+    @Nullable
+    private Float borderWidth;
 }

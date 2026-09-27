@@ -48,7 +48,7 @@ public class BATilesOverlay extends Overlay
             return null;
         }
 
-        Stroke stroke = new BasicStroke((float) config.borderWidth());
+        Stroke defaultStroke = new BasicStroke(TileStyle.borderWidth(null, config.borderWidth()));
         for (final ColorTileMarker point : points)
         {
             WorldPoint worldPoint = point.getWorldPoint();
@@ -64,13 +64,17 @@ public class BATilesOverlay extends Overlay
                 tileColor = config.markerColor();
             }
 
-            drawTile(graphics, worldPoint, tileColor, point.getLabel(), stroke);
+            Stroke stroke = point.getBorderWidth() == null
+                    ? defaultStroke
+                    : new BasicStroke(TileStyle.borderWidth(point.getBorderWidth(), config.borderWidth()));
+            Color fill = TileStyle.fill(tileColor, point.getFillOpacityPercent(), config.fillOpacity());
+            drawTile(graphics, worldPoint, tileColor, fill, point.getLabel(), stroke);
         }
 
         return null;
     }
 
-    private void drawTile(Graphics2D graphics, WorldPoint point, Color color, @Nullable String label, Stroke borderStroke)
+    private void drawTile(Graphics2D graphics, WorldPoint point, Color color, Color fill, @Nullable String label, Stroke borderStroke)
     {
         WorldPoint playerLocation = client.getLocalPlayer().getWorldLocation();
 
@@ -88,7 +92,7 @@ public class BATilesOverlay extends Overlay
         Polygon poly = Perspective.getCanvasTilePoly(client, lp);
         if (poly != null)
         {
-            OverlayUtil.renderPolygon(graphics, poly, color, new Color(0, 0, 0, config.fillOpacity()), borderStroke);
+            OverlayUtil.renderPolygon(graphics, poly, color, fill, borderStroke);
         }
 
         if (!Strings.isNullOrEmpty(label))
