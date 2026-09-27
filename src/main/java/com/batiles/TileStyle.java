@@ -45,6 +45,15 @@ final class TileStyle
 		return Math.max(MIN_BORDER_WIDTH, Math.min(MAX_BORDER_WIDTH, width));
 	}
 
+	/**
+	 * @return whether a tile with this own border width has a border; only a tile's own width of 0 (or less) means
+	 *         none, since the plugin's Border Width has always drawn at least a hairline
+	 */
+	static boolean hasBorder(@Nullable Float tileBorderWidth)
+	{
+		return tileBorderWidth == null || tileBorderWidth > 0;
+	}
+
 	private static int clamp(int value, int min, int max)
 	{
 		return Math.max(min, Math.min(max, value));

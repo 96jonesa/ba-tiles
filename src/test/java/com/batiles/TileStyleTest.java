@@ -39,6 +39,17 @@ public class TileStyleTest
 		}
 	}
 
+	public static class HasBorder
+	{
+		@Test
+		public void onlyAnOwnWidthOfZeroMeansNoBorder()
+		{
+			assertEquals(true, TileStyle.hasBorder(null));
+			assertEquals(true, TileStyle.hasBorder(0.5f));
+			assertEquals(false, TileStyle.hasBorder(0f));
+		}
+	}
+
 	public static class BorderWidth
 	{
 		@Test
