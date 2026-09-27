@@ -1,10 +1,17 @@
 package com.batiles;
 
+import com.google.gson.Gson;
+import com.google.gson.JsonParseException;
 import java.awt.BorderLayout;
 import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.GridLayout;
 import java.awt.Insets;
+import java.awt.Toolkit;
+import java.awt.datatransfer.DataFlavor;
+import java.awt.datatransfer.StringSelection;
+import java.awt.datatransfer.UnsupportedFlavorException;
+import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.function.Supplier;
@@ -13,6 +20,7 @@ import javax.swing.JButton;
 import javax.swing.JCheckBox;
 import javax.swing.JComboBox;
 import javax.swing.JLabel;
+import javax.swing.JOptionPane;
 import javax.swing.JPanel;
 import javax.swing.SwingUtilities;
 import net.runelite.client.ui.ColorScheme;
@@ -29,6 +37,7 @@ class BATilesPanel extends PluginPanel
 	private final BATilesStore store;
 	private final Supplier<TileMapEditor> editor;
 	private final Supplier<GroundMarkerImportDialog> importDialog;
+	private final Gson gson;
 	private final Runnable storeListener = () -> SwingUtilities.invokeLater(this::refresh);
 
 	private final JComboBox<BARole> roleCombo = new JComboBox<>(BARole.values());
@@ -38,11 +47,13 @@ class BATilesPanel extends PluginPanel
 	private int currentWave = 1;
 	private boolean refreshing;
 
-	BATilesPanel(BATilesStore store, Supplier<TileMapEditor> editor, Supplier<GroundMarkerImportDialog> importDialog)
+	BATilesPanel(BATilesStore store, Supplier<TileMapEditor> editor, Supplier<GroundMarkerImportDialog> importDialog,
+				 Gson gson)
 	{
 		this.store = store;
 		this.editor = editor;
 		this.importDialog = importDialog;
+		this.gson = gson;
 
 		setLayout(new BorderLayout());
 		setBorder(BorderFactory.createEmptyBorder(10, 10, 10, 10));
@@ -61,6 +72,17 @@ class BATilesPanel extends PluginPanel
 		importGroundMarkers.setToolTipText("Convert Ground Markers markers in the arena into BA Tiles");
 		importGroundMarkers.addActionListener(e -> importDialog.get().open());
 		top.add(importGroundMarkers);
+
+		JPanel backup = new JPanel(new GridLayout(1, 2, 6, 0));
+		JButton exportAll = new JButton("Export all");
+		exportAll.setToolTipText("Copy all of BA Tiles' tiles, presets and settings to the clipboard");
+		exportAll.addActionListener(e -> exportAll());
+		JButton importAll = new JButton("Import all");
+		importAll.setToolTipText("Replace all of BA Tiles' tiles, presets and settings with a backup from the clipboard");
+		importAll.addActionListener(e -> importAll());
+		backup.add(exportAll);
+		backup.add(importAll);
+		top.add(backup);
 
 		top.add(new JLabel("Active strategy presets"));
 		top.add(roleCombo);
@@ -145,6 +167,53 @@ class BATilesPanel extends PluginPanel
 		header.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
 		header.setToolTipText(tooltip);
 		return header;
+	}
+
+	private void exportAll()
+	{
+		BATilesBackup backup = store.exportAll();
+		Toolkit.getDefaultToolkit().getSystemClipboard().setContents(new StringSelection(backup.toJson(gson)), null);
+		message("Copied all of BA Tiles to the clipboard: " + backup.describe(gson) + ".", JOptionPane.INFORMATION_MESSAGE);
+	}
+
+	private void importAll()
+	{
+		BATilesBackup backup;
+		try
+		{
+			String text = (String) Toolkit.getDefaultToolkit().getSystemClipboard().getData(DataFlavor.stringFlavor);
+			backup = BATilesBackup.fromJson(gson, text);
+		}
+		catch (IOException | UnsupportedFlavorException | IllegalStateException | ClassCastException | JsonParseException ex)
+		{
+			message("The clipboard does not contain a BA Tiles backup. Use \"Export all\" to make one.",
+					JOptionPane.WARNING_MESSAGE);
+			return;
+		}
+
+		String current = store.exportAll().describe(gson);
+		int result = JOptionPane.showOptionDialog(this,
+				html("Replace <b>all</b> of BA Tiles on this profile with the backup from the clipboard?<br><br>"
+						+ "<b>Backup:</b> " + backup.describe(gson) + "<br>"
+						+ "<b>Replaced:</b> " + current + "<br><br>"
+						+ "This can't be undone. Use \"Export all\" first if you want to keep what you have."),
+				"Import all BA Tiles", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE, null,
+				new Object[]{"Replace everything", "Cancel"}, "Cancel");
+		if (result == 0)
+		{
+			store.replaceAll(backup);
+			message("Imported the backup: " + backup.describe(gson) + ".", JOptionPane.INFORMATION_MESSAGE);
+		}
+	}
+
+	private void message(String text, int type)
+	{
+		JOptionPane.showMessageDialog(this, html(text), "BA Tiles", type);
+	}
+
+	private static String html(String text)
+	{
+		return "<html><div style='width:260px'>" + text + "</div></html>";
 	}
 
 	private String role()

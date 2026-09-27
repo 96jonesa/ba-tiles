@@ -6,7 +6,9 @@ import com.google.gson.reflect.TypeToken;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.UUID;
@@ -353,5 +355,42 @@ class BATilesStore
 			fireChanged();
 		}
 		return added;
+	}
+
+	// ---- full backup ----
+
+	/**
+	 * @return every key BA Tiles stores in the current profile, with its value
+	 */
+	BATilesBackup exportAll()
+	{
+		String prefix = BATilesConfig.BA_TILES_CONFIG_GROUP + ".";
+		Map<String, String> entries = new HashMap<>();
+		for (String wholeKey : configManager.getConfigurationKeys(prefix))
+		{
+			String key = wholeKey.substring(prefix.length());
+			String value = configManager.getConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, key);
+			if (value != null)
+			{
+				entries.put(key, value);
+			}
+		}
+		return BATilesBackup.of(entries);
+	}
+
+	/**
+	 * Replaces everything BA Tiles stores in the current profile with the backup's contents.
+	 */
+	void replaceAll(BATilesBackup backup)
+	{
+		for (String key : backup.keysToRemove(exportAll().getEntries().keySet()))
+		{
+			configManager.unsetConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, key);
+		}
+		for (Map.Entry<String, String> entry : backup.getEntries().entrySet())
+		{
+			configManager.setConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, entry.getKey(), entry.getValue());
+		}
+		fireChanged();
 	}
 }
