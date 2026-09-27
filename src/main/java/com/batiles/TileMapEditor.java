@@ -264,6 +264,8 @@ class TileMapEditor extends JDialog
 		fillRow.add(fillOpacityValue, BorderLayout.EAST);
 		markerDetails.add(leftAligned(fillRow));
 		ownBorderBox.setToolTipText("Use this border width for the tile instead of the plugin's Border Width");
+		// wide enough for e.g. "0.5" and "2.0"
+		((JSpinner.DefaultEditor) borderWidthSpinner.getEditor()).getTextField().setColumns(3);
 		JPanel borderRow = new JPanel(new BorderLayout(6, 0));
 		borderRow.add(ownBorderBox, BorderLayout.CENTER);
 		borderRow.add(borderWidthSpinner, BorderLayout.EAST);
