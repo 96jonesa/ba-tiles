@@ -52,6 +52,8 @@ class BaUtilitiesImportDialog extends JDialog
 	private final BATilesStore store;
 	private final Supplier<List<ProfileGroundMarkers.Source>> otherProfiles;
 	private final Gson gson;
+	// names can be taken from the sidebar or editor while this window is open
+	private final Runnable storeListener = () -> SwingUtilities.invokeLater(this::update);
 
 	private final JComboBox<Object> sourceCombo = new JComboBox<>();
 	private final JLabel summary = new JLabel();
@@ -127,6 +129,14 @@ class BaUtilitiesImportDialog extends JDialog
 
 		setSize(980, 820);
 		setLocationRelativeTo(owner);
+		store.addListener(storeListener);
+	}
+
+	@Override
+	public void dispose()
+	{
+		store.removeListener(storeListener);
+		super.dispose();
 	}
 
 	void open()
@@ -580,7 +590,9 @@ class BaUtilitiesImportDialog extends JDialog
 		text.append("<li><b>Not import strategy notes</b>: BA Tiles has no notes")
 				.append(notes > 0 ? " (" + notes + " strateg" + (notes == 1 ? "y has" : "ies have") + " notes, marked \"has notes\" below)" : "")
 				.append(".</li>");
-		text.append("<li>Keep everything already in BA Tiles. Nothing is removed, and anything imported before is skipped.</li>");
+		text.append("<li>Keep everything already in BA Tiles; nothing is removed. If you imported before, presets and GLOBAL"
+				+ " tiles from that import are kept as they are (including any changes you made), and lineups from it are"
+				+ " updated to BA Utilities' current wave assignments.</li>");
 		text.append("</ul></div></html>");
 		return text.toString();
 	}
@@ -590,6 +602,15 @@ class BaUtilitiesImportDialog extends JDialog
 	private void doImport()
 	{
 		BaUtilitiesImport.Choices choices = choices();
+		// re-check against what BA Tiles has now, in case something was created or renamed since the last update
+		if (!BaUtilitiesImport.presetNameCollisions(plan, choices, store.getPresets()).isEmpty()
+				|| !BaUtilitiesImport.lineupNameCollisions(plan, choices, store.getLineups()).isEmpty())
+		{
+			update();
+			JOptionPane.showMessageDialog(this, "Some names are now already taken in BA Tiles. Rename everything marked in red first.",
+					getTitle(), JOptionPane.WARNING_MESSAGE);
+			return;
+		}
 		BaUtilitiesImport.Result result = BaUtilitiesImport.apply(store, plan, choices);
 		StringBuilder text = new StringBuilder("<html><div style='width:320px'>Imported from BA Utilities:<ul>");
 		text.append("<li>").append(result.getPresetsCreated()).append(" presets with ").append(result.getPresetTiles()).append(" tiles</li>");
@@ -603,10 +624,15 @@ class BaUtilitiesImportDialog extends JDialog
 			text.append("<li>").append(result.getLineupsActivated()).append(" roles switched to their BA Utilities setup</li>");
 		}
 		text.append("</ul>");
-		if (result.getPresetsAlreadyImported() > 0 || result.getLineupsAlreadyImported() > 0)
+		if (result.getPresetsAlreadyImported() > 0)
 		{
-			text.append("Skipped what an earlier import already created (").append(result.getPresetsAlreadyImported())
-					.append(" presets, ").append(result.getLineupsAlreadyImported()).append(" lineups).");
+			text.append("Kept ").append(result.getPresetsAlreadyImported())
+					.append(" presets from an earlier import as they are. ");
+		}
+		if (result.getLineupsAlreadyImported() > 0)
+		{
+			text.append("Updated ").append(result.getLineupsAlreadyImported())
+					.append(" lineups from an earlier import to BA Utilities' current wave assignments.");
 		}
 		text.append("</div></html>");
 		setVisible(false);

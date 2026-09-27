@@ -183,6 +183,32 @@ public class BaUtilitiesImportTest
 		}
 
 		@Test
+		public void aRenamedPresetFromAnEarlierImportStillCollides()
+		{
+			BATilesStore store = newStore();
+			BaUtilitiesImport.Plan plan = BaUtilitiesImport.plan(store());
+			store.addPresetsIfAbsent(List.of(new StrategyPreset(BaUtilitiesImport.presetId("strat-stack", 1, "d"), "Foo", 1, "d")));
+			BaUtilitiesImport.Choices defaults = BaUtilitiesImport.Choices.defaults(plan);
+			Map<String, String> names = new LinkedHashMap<>(defaults.getPresetNames());
+			names.put(WALL_SPLIT, "Foo");
+			BaUtilitiesImport.Choices choices = new BaUtilitiesImport.Choices(names, defaults.getWaves(), defaults.getRoles(),
+					defaults.getLineupNames(), true);
+			assertEquals("\"Foo\" is already used by an existing preset on wave 1 Defender",
+					BaUtilitiesImport.presetNameCollisions(plan, choices, store.getPresets()).get(WALL_SPLIT));
+		}
+
+		@Test
+		public void wavesAndRolesAnEarlierImportCoversAreNotChecked()
+		{
+			// the earlier import's preset was renamed, and the user made their own "My Stack" there: import skips it anyway
+			BaUtilitiesImport.Plan plan = BaUtilitiesImport.plan(store());
+			List<StrategyPreset> existing = List.of(
+					new StrategyPreset(BaUtilitiesImport.presetId("strat-stack", 1, "d"), "Bar", 1, "d"),
+					new StrategyPreset("mine", "My Stack", 1, "d"));
+			assertEquals(Map.of(), BaUtilitiesImport.presetNameCollisions(plan, BaUtilitiesImport.Choices.defaults(plan), existing));
+		}
+
+		@Test
 		public void presetsFromAnEarlierImportDoNotCollide()
 		{
 			BaUtilitiesImport.Plan plan = BaUtilitiesImport.plan(store());
@@ -202,6 +228,51 @@ public class BaUtilitiesImportTest
 			Map<String, String> collisions = BaUtilitiesImport.lineupNameCollisions(plan, choices,
 					List.of(new Lineup("x", "beginner", "d", Map.of()), new Lineup("y", "Heal setup", "a", Map.of())));
 			assertEquals(Set.of(BEGINNER_LINEUP), collisions.keySet());
+		}
+	}
+
+	public static class Reimport
+	{
+		@Test
+		public void aRenamedLineupFromAnEarlierImportStillCollidesWithANewOne()
+		{
+			BaUtilitiesImport.Plan plan = BaUtilitiesImport.plan(store());
+			List<Lineup> existing = List.of(new Lineup("bau-lineup:gone:d", "BA Utilities current setup", "d", Map.of()));
+			assertTrue(BaUtilitiesImport.lineupNameCollisions(plan, BaUtilitiesImport.Choices.defaults(plan), existing)
+					.containsKey("bau-current:d"));
+		}
+
+		@Test
+		public void lineupsFollowBaUtilitiesCurrentAssignments()
+		{
+			BATilesStore store = newStore();
+			BaUtilitiesImport.Plan first = BaUtilitiesImport.plan(store());
+			BaUtilitiesImport.apply(store, first, BaUtilitiesImport.Choices.defaults(first));
+
+			// the defender's wave 3 selection changes in BA Utilities, then everything is imported again
+			BaUtilitiesImport.Plan second = BaUtilitiesImport.plan(RuneLiteAPI.GSON.fromJson(
+					STORE_JSON.replace("\"wave\":3,\"strategyId\":\"" + WALL_SPLIT + "\"",
+							"\"wave\":3,\"strategyId\":\"built-in:tile-marker-strategy:hendi-triangle\""),
+					BaUtilitiesData.Store.class));
+			BaUtilitiesImport.apply(store, second, BaUtilitiesImport.Choices.defaults(second));
+
+			assertEquals(BaUtilitiesImport.presetId("built-in:tile-marker-strategy:hendi-triangle", 3, "d"), store.getActivePresetId(3, "d"));
+			assertEquals("bau-current:d", store.getActiveLineupId("d"));
+		}
+
+		@Test
+		public void editedOrDeletedGlobalTilesAreNotAddedAgain()
+		{
+			BATilesStore store = newStore();
+			BaUtilitiesImport.Plan plan = BaUtilitiesImport.plan(store());
+			BaUtilitiesImport.apply(store, plan, BaUtilitiesImport.Choices.defaults(plan));
+			List<GroundMarkerPoint> global = store.getPoints(7509).stream().filter(p -> !p.isPresetTile()).collect(Collectors.toList());
+			store.updatePoint(global.get(0), p -> p.withLabel("edited"));
+			store.removePoint(global.get(1));
+
+			BaUtilitiesImport.Result again = BaUtilitiesImport.apply(store, plan, BaUtilitiesImport.Choices.defaults(plan));
+			assertEquals(0, again.getGlobalTiles());
+			assertEquals(2, store.getPoints(7509).stream().filter(p -> !p.isPresetTile()).count());
 		}
 	}
 

@@ -40,6 +40,7 @@ final class BaUtilitiesImport
 	private static final String CURRENT_LINEUP_ID_PREFIX = "bau-current:";
 	private static final Color DEFAULT_MARKER_COLOR = new Color(80, 170, 255);
 	private static final List<String> ROLE_CODES = BATilesPlugin.ALL_ROLES;
+	private static final String EXISTING = "\u0000existing";
 
 	private BaUtilitiesImport()
 	{
@@ -314,48 +315,58 @@ final class BaUtilitiesImport
 
 	/**
 	 * @return strategy id to a description of where its preset name is already used (on a wave and role it would be
-	 *         created for), for every imported strategy whose name must be changed
+	 *         created for), for every imported strategy whose name must be changed. Waves and roles whose preset an
+	 *         earlier import already created are skipped by {@link #apply}, so they are not checked; everywhere else
+	 *         the name is checked against every existing preset, including renamed ones from earlier imports.
 	 */
 	static Map<String, String> presetNameCollisions(Plan plan, Choices choices, Collection<StrategyPreset> existing)
 	{
+		Choices resolved = choices.withRequirements(plan);
+		Set<String> existingIds = existing.stream().map(StrategyPreset::getId).collect(Collectors.toSet());
 		Map<String, String> collisions = new LinkedHashMap<>();
-		// wave + role -> names taken there, by presets that are not this import's own
+		// wave + role -> lower-case name -> who has it: EXISTING, or the strategy id that will create it
 		Map<String, Map<String, String>> taken = new HashMap<>();
 		for (StrategyPreset preset : existing)
 		{
-			if (!preset.getId().startsWith(PRESET_ID_PREFIX))
-			{
-				taken.computeIfAbsent(preset.getWave() + preset.getRole(), k -> new HashMap<>())
-						.put(preset.getName().toLowerCase(), "an existing preset");
-			}
+			taken.computeIfAbsent(preset.getWave() + preset.getRole(), k -> new HashMap<>())
+					.put(preset.getName().trim().toLowerCase(), EXISTING);
 		}
 
 		for (Strategy strategy : plan.getStrategies())
 		{
-			if (!choices.includes(strategy.getId()))
+			if (!resolved.includes(strategy.getId()))
 			{
 				continue;
 			}
-			String name = choices.getPresetNames().getOrDefault(strategy.getId(), strategy.getName()).trim();
-			for (int wave : choices.getWaves().get(strategy.getId()))
+			String name = resolved.getPresetNames().getOrDefault(strategy.getId(), strategy.getName()).trim();
+			for (int wave : resolved.getWaves().get(strategy.getId()))
 			{
-				for (String role : choices.getRoles().get(strategy.getId()))
+				if (!strategy.possibleWaves().contains(wave))
 				{
-					String combo = wave + role;
-					String owner = taken.computeIfAbsent(combo, k -> new HashMap<>()).get(name.toLowerCase());
+					continue;
+				}
+				for (String role : resolved.getRoles().get(strategy.getId()))
+				{
+					if (existingIds.contains(presetId(strategy.getId(), wave, role)))
+					{
+						continue;
+					}
 					if (name.isEmpty())
 					{
 						collisions.putIfAbsent(strategy.getId(), "the name is empty");
+						continue;
 					}
-					else if (owner != null && !owner.equals(strategy.getId()))
+					Map<String, String> names = taken.computeIfAbsent(wave + role, k -> new HashMap<>());
+					String owner = names.get(name.toLowerCase());
+					if (owner == null)
 					{
-						String by = owner.equals("an existing preset") ? owner : "another imported strategy";
-						collisions.putIfAbsent(strategy.getId(), "\"" + name + "\" is already used by " + by + " on wave " + wave
+						names.put(name.toLowerCase(), strategy.getId());
+					}
+					else if (!owner.equals(strategy.getId()))
+					{
+						collisions.putIfAbsent(strategy.getId(), "\"" + name + "\" is already used by "
+								+ (owner.equals(EXISTING) ? "an existing preset" : "another imported strategy") + " on wave " + wave
 								+ " " + BARole.fromCode(role).getDisplayName());
-					}
-					else
-					{
-						taken.get(combo).put(name.toLowerCase(), strategy.getId());
 					}
 				}
 			}
@@ -364,42 +375,43 @@ final class BaUtilitiesImport
 	}
 
 	/**
-	 * @return lineup id to a description of the collision, for every imported lineup whose name must be changed
+	 * @return lineup id to a description of the collision, for every imported lineup whose name must be changed. A
+	 *         lineup an earlier import created keeps its name, so it is not checked; new ones are checked against every
+	 *         existing lineup for the role.
 	 */
 	static Map<String, String> lineupNameCollisions(Plan plan, Choices choices, Collection<Lineup> existing)
 	{
+		Set<String> existingIds = existing.stream().map(Lineup::getId).collect(Collectors.toSet());
 		Map<String, String> collisions = new LinkedHashMap<>();
 		Map<String, Map<String, String>> taken = new HashMap<>();
 		for (Lineup lineup : existing)
 		{
-			if (!lineup.getId().startsWith(LINEUP_ID_PREFIX) && !lineup.getId().startsWith(CURRENT_LINEUP_ID_PREFIX))
-			{
-				taken.computeIfAbsent(lineup.getRole(), k -> new HashMap<>()).put(lineup.getName().toLowerCase(), "an existing lineup");
-			}
+			taken.computeIfAbsent(lineup.getRole(), k -> new HashMap<>()).put(lineup.getName().trim().toLowerCase(), EXISTING);
 		}
 
 		for (LineupSource lineup : plan.getLineups())
 		{
 			String name = choices.getLineupNames().get(lineup.getLineupId());
-			if (name == null)
+			if (name == null || existingIds.contains(lineup.getLineupId()))
 			{
 				continue;
 			}
 			name = name.trim();
-			String owner = taken.computeIfAbsent(lineup.getRole(), k -> new HashMap<>()).get(name.toLowerCase());
+			Map<String, String> names = taken.computeIfAbsent(lineup.getRole(), k -> new HashMap<>());
+			String owner = names.get(name.toLowerCase());
 			if (name.isEmpty())
 			{
 				collisions.put(lineup.getLineupId(), "the name is empty");
 			}
 			else if (owner != null)
 			{
-				String by = owner.equals("an existing lineup") ? owner : "another imported lineup";
-				collisions.put(lineup.getLineupId(), "\"" + name + "\" is already used by " + by + " for "
+				collisions.put(lineup.getLineupId(), "\"" + name + "\" is already used by "
+						+ (owner.equals(EXISTING) ? "an existing lineup" : "another imported lineup") + " for "
 						+ BARole.fromCode(lineup.getRole()).getDisplayName());
 			}
 			else
 			{
-				taken.get(lineup.getRole()).put(name.toLowerCase(), lineup.getLineupId());
+				names.put(name.toLowerCase(), lineup.getLineupId());
 			}
 		}
 		return collisions;
@@ -466,8 +478,11 @@ final class BaUtilitiesImport
 			}
 		}
 
-		// GLOBAL's current selections: tiles that are not part of a preset, for all roles on that wave
+		// GLOBAL's current selections: tiles that are not part of a preset, for all roles on that wave. They have no id,
+		// so what was added is remembered by key; a tile the user edited or deleted since is not added again.
 		int globalTiles = 0;
+		Set<String> importedKeys = store.getBaUtilitiesImportedKeys();
+		Set<String> newKeys = new LinkedHashSet<>();
 		for (Map.Entry<Integer, String> selection : plan.getGlobalSelections().entrySet())
 		{
 			Strategy strategy = plan.strategy(selection.getValue());
@@ -477,15 +492,17 @@ final class BaUtilitiesImport
 			}
 			for (BaUtilitiesData.Marker marker : strategy.getMarkers())
 			{
+				String key = globalTileKey(selection.getKey(), strategy.getId(), marker);
 				GroundMarkerPoint tile = toTile(marker, List.of(selection.getKey()), ROLE_CODES, null);
 				List<GroundMarkerPoint> region = newTiles.computeIfAbsent(tile.getRegionId(), k -> new ArrayList<>());
-				if (!store.getPoints(tile.getRegionId()).contains(tile) && !region.contains(tile))
+				if (!importedKeys.contains(key) && newKeys.add(key) && !store.getPoints(tile.getRegionId()).contains(tile))
 				{
 					region.add(tile);
 					globalTiles++;
 				}
 			}
 		}
+		store.addBaUtilitiesImportedKeys(newKeys);
 
 		store.addPresetsIfAbsent(newPresets);
 		for (Map.Entry<Integer, List<GroundMarkerPoint>> region : newTiles.entrySet())
@@ -520,7 +537,9 @@ final class BaUtilitiesImport
 			Lineup lineup = new Lineup(source.getLineupId(), name.trim(), source.getRole(), presetIds(source));
 			if (existingLineupIds.contains(lineup.getId()))
 			{
+				// lineups can't be edited in BA Tiles (only renamed), so follow BA Utilities' current wave assignments
 				lineupsAlreadyImported++;
+				store.updateLineupPresets(lineup.getId(), lineup.getPresetIds());
 				lineup = store.getLineup(lineup.getId()).orElse(lineup);
 			}
 			else
@@ -545,6 +564,18 @@ final class BaUtilitiesImport
 		}
 
 		return new Result(newPresets.size(), alreadyImported, presetTiles, lineupsCreated, lineupsAlreadyImported, globalTiles, activated);
+	}
+
+	/**
+	 * Identifies a GLOBAL tile by wave, strategy and marker (or, for a marker without an id, its position).
+	 */
+	static String globalTileKey(int wave, String strategyId, BaUtilitiesData.Marker marker)
+	{
+		BaUtilitiesData.Tile tile = marker.getTile();
+		String markerKey = Strings.isNullOrEmpty(marker.getId())
+				? tile.getRegionId() + "/" + tile.getRegionX() + "/" + tile.getRegionY() + "/" + tile.getZ()
+				: marker.getId();
+		return "global:" + wave + ":" + strategyId + ":" + markerKey;
 	}
 
 	private static Map<Integer, String> presetIds(LineupSource source)
