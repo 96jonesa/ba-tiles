@@ -2,7 +2,9 @@ package com.batiles;
 
 import java.awt.BorderLayout;
 import java.awt.FlowLayout;
+import java.awt.Toolkit;
 import java.awt.Window;
+import java.awt.datatransfer.StringSelection;
 import java.awt.event.MouseEvent;
 import com.google.gson.Gson;
 import java.io.IOException;
@@ -10,8 +12,8 @@ import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Properties;
 import java.util.Set;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
@@ -28,6 +30,7 @@ import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
 import lombok.extern.slf4j.Slf4j;
 import net.runelite.client.ui.ColorScheme;
+import net.runelite.client.util.Filepath;
 
 /**
  * Pop-up window showing the Ground Markers plugin's markers on the arena maps (waves 1-9 and wave 10), for converting
@@ -43,11 +46,11 @@ class GroundMarkerImportDialog extends JDialog
 	private static final String FLAG_HEX = String.format("#%06x", ArenaMapPanel.FLAG_COLOR.getRGB() & 0xffffff);
 
 	private final BATilesStore store;
-	private final Supplier<List<ProfileGroundMarkers.Source>> otherProfiles;
 	private final Gson gson;
 	private final Runnable storeListener = () -> SwingUtilities.invokeLater(this::refresh);
 
 	private final JComboBox<Object> sourceCombo = new JComboBox<>();
+	private final JButton chooseProfilesButton = new JButton("Choose profile files...");
 	private final JComboBox<ArenaMapLayout> layoutCombo = new JComboBox<>(ArenaMapLayout.values());
 	private final JComboBox<ArenaMapPanel.View> viewCombo = new JComboBox<>(ArenaMapPanel.View.values());
 	private final JSlider zoom = new JSlider(MIN_TILE_SIZE, MAX_TILE_SIZE, DEFAULT_TILE_SIZE);
@@ -62,15 +65,35 @@ class GroundMarkerImportDialog extends JDialog
 	private List<GroundMarkerPoint> markers = new ArrayList<>();
 	private List<GroundMarkerPoint> tiles = new ArrayList<>();
 	private final Set<GroundMarkerPoint> selected = new LinkedHashSet<>();
-	// ground markers of the selected other profile, by region; null while the source is this profile
-	private Map<Integer, List<GroundMarkerPoint>> profileMarkers;
+	// the profile files the user picked, if any
+	private ChosenProfiles chosenProfiles;
 	private boolean refreshingSources;
 
-	GroundMarkerImportDialog(Window owner, BATilesStore store, Supplier<List<ProfileGroundMarkers.Source>> otherProfiles, Gson gson)
+	/**
+	 * Profile files the user picked, with their ground markers read when they were picked.
+	 */
+	private static final class ChosenProfiles
+	{
+		private final List<String> names;
+		private final Map<Integer, List<GroundMarkerPoint>> markers;
+
+		private ChosenProfiles(List<String> names, Map<Integer, List<GroundMarkerPoint>> markers)
+		{
+			this.names = names;
+			this.markers = markers;
+		}
+
+		@Override
+		public String toString()
+		{
+			return (names.size() == 1 ? "Profile: " : "Profiles: ") + String.join(", ", names);
+		}
+	}
+
+	GroundMarkerImportDialog(Window owner, BATilesStore store, Gson gson)
 	{
 		super(owner, "Import BA ground markers", ModalityType.MODELESS);
 		this.store = store;
-		this.otherProfiles = otherProfiles;
 		this.gson = gson;
 		setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
 
@@ -87,6 +110,7 @@ class GroundMarkerImportDialog extends JDialog
 		JPanel controls = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
 		controls.add(new JLabel("Ground markers from"));
 		controls.add(sourceCombo);
+		controls.add(chooseProfilesButton);
 		controls.add(Box.createHorizontalStrut(12));
 		controls.add(new JLabel("Map"));
 		controls.add(layoutCombo);
@@ -102,7 +126,22 @@ class GroundMarkerImportDialog extends JDialog
 		actions.add(Box.createHorizontalStrut(12));
 		actions.add(convertAllButton);
 
-		JLabel help = new JLabel("<html>Ground markers, from this profile or another of your RuneLite profiles, are converted"
+		// other profiles: the user picks their files, so where they are needs saying
+		JPanel profilesHint = new JPanel(new BorderLayout(8, 0));
+		JLabel profilesHintText = new JLabel("<html><div style='width:640px'>To import from other RuneLite profiles, click <b>Choose profile files</b>."
+				+ " They're in <b>" + ProfileFiles.profilesFolder() + "</b>: from your home folder, open <b>.runelite</b>, then"
+				+ " <b>profiles2</b>, and pick the files that start with your profile names (several at once is fine). You can"
+				+ " also paste the folder into the file name box and press Enter.</div></html>");
+		profilesHintText.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
+		JButton copyPath = new JButton("Copy path");
+		copyPath.addActionListener(e -> Toolkit.getDefaultToolkit().getSystemClipboard()
+				.setContents(new StringSelection(ProfileFiles.profilesFolder()), null));
+		profilesHint.add(profilesHintText, BorderLayout.CENTER);
+		JPanel copyPathHolder = new JPanel(new BorderLayout());
+		copyPathHolder.add(copyPath, BorderLayout.NORTH);
+		profilesHint.add(copyPathHolder, BorderLayout.EAST);
+
+		JLabel help = new JLabel("<html>Ground markers, from this profile or the profiles you pick, are converted"
 				+ " into BA Tiles <b>on this profile</b>, shown on <b>all waves for all roles</b>,"
 				+ " with the same color and label. <b>Click</b> a marker to select or deselect it. Faded markers already have"
 				+ " their BA Tile. Markers with an <font color='" + FLAG_HEX + "'>orange corner</font> are on a tile that"
@@ -112,7 +151,7 @@ class GroundMarkerImportDialog extends JDialog
 
 		JPanel top = new JPanel();
 		top.setLayout(new BoxLayout(top, BoxLayout.Y_AXIS));
-		for (JPanel row : new JPanel[]{controls, actions})
+		for (JPanel row : new JPanel[]{controls, profilesHint, actions})
 		{
 			row.setAlignmentX(LEFT_ALIGNMENT);
 			top.add(row);
@@ -134,9 +173,11 @@ class GroundMarkerImportDialog extends JDialog
 		{
 			if (!refreshingSources)
 			{
-				loadSource();
+				selected.clear();
+				refresh();
 			}
 		});
+		chooseProfilesButton.addActionListener(e -> chooseProfiles());
 		layoutCombo.addActionListener(e ->
 		{
 			selected.clear();
@@ -166,7 +207,8 @@ class GroundMarkerImportDialog extends JDialog
 	void open()
 	{
 		refreshSources();
-		loadSource();
+		selected.clear();
+		refresh();
 		setVisible(true);
 		toFront();
 	}
@@ -179,7 +221,7 @@ class GroundMarkerImportDialog extends JDialog
 	}
 
 	/**
-	 * Lists this profile and the user's other profiles as sources, keeping the current choice if it still exists.
+	 * Lists this profile and, once the user has picked some, their chosen profiles, keeping the current choice.
 	 */
 	private void refreshSources()
 	{
@@ -189,21 +231,10 @@ class GroundMarkerImportDialog extends JDialog
 		{
 			sourceCombo.removeAllItems();
 			sourceCombo.addItem(THIS_PROFILE);
-			List<ProfileGroundMarkers.Source> profiles;
-			try
+			if (chosenProfiles != null)
 			{
-				profiles = otherProfiles.get();
+				sourceCombo.addItem(chosenProfiles);
 			}
-			catch (RuntimeException ex)
-			{
-				log.warn("Unable to list RuneLite profiles", ex);
-				profiles = List.of();
-			}
-			for (ProfileGroundMarkers.Source profile : profiles)
-			{
-				sourceCombo.addItem(profile);
-			}
-			// the first item (this profile) stays selected if the previous choice no longer exists
 			if (current != null)
 			{
 				sourceCombo.setSelectedItem(current);
@@ -216,28 +247,55 @@ class GroundMarkerImportDialog extends JDialog
 	}
 
 	/**
-	 * Reads the selected source's ground markers (from its profile file, for another profile) and shows them.
+	 * Lets the user pick profile files, reads their ground markers, and shows them.
 	 */
-	private void loadSource()
+	private void chooseProfiles()
 	{
-		selected.clear();
-		profileMarkers = null;
-		Object source = sourceCombo.getSelectedItem();
-		if (source instanceof ProfileGroundMarkers.Source)
+		List<Filepath> files = ProfileFiles.choose(this);
+		if (files.isEmpty())
 		{
-			ProfileGroundMarkers.Source profile = (ProfileGroundMarkers.Source) source;
+			return;
+		}
+
+		List<String> names = new ArrayList<>();
+		List<Properties> profiles = new ArrayList<>();
+		List<String> unreadable = new ArrayList<>();
+		for (Filepath file : files)
+		{
 			try
 			{
-				profileMarkers = ProfileGroundMarkers.readMarkers(profile.getFile(), gson, ArenaMapLayout.REGION_IDS);
+				ProfileFiles.Profile profile = ProfileFiles.load(file);
+				names.add(profile.getName());
+				profiles.add(profile.getProperties());
 			}
-			catch (IOException ex)
+			catch (IOException | IllegalArgumentException ex)
 			{
-				log.warn("Unable to read profile {}", profile.getName(), ex);
-				profileMarkers = Map.of();
-				JOptionPane.showMessageDialog(this, "Unable to read the ground markers of profile \"" + profile.getName() + "\".",
-						"Import BA ground markers", JOptionPane.WARNING_MESSAGE);
+				log.warn("Unable to read profile file {}", file.getFileName(), ex);
+				unreadable.add(file.getFileName());
 			}
 		}
+		if (!unreadable.isEmpty())
+		{
+			JOptionPane.showMessageDialog(this, "Unable to read " + String.join(", ", unreadable) + ".",
+					"Import BA ground markers", JOptionPane.WARNING_MESSAGE);
+		}
+		if (profiles.isEmpty())
+		{
+			return;
+		}
+
+		chosenProfiles = new ChosenProfiles(names, ProfileFiles.readMarkers(profiles, gson, ArenaMapLayout.REGION_IDS));
+		refreshSources();
+		refreshingSources = true;
+		try
+		{
+			sourceCombo.setSelectedItem(chosenProfiles);
+		}
+		finally
+		{
+			refreshingSources = false;
+		}
+		selected.clear();
 		refresh();
 	}
 
@@ -246,7 +304,10 @@ class GroundMarkerImportDialog extends JDialog
 	 */
 	private List<GroundMarkerPoint> groundMarkers(int regionId)
 	{
-		return profileMarkers == null ? store.getGroundMarkers(regionId) : profileMarkers.getOrDefault(regionId, List.of());
+		Object source = sourceCombo.getSelectedItem();
+		return source instanceof ChosenProfiles
+				? ((ChosenProfiles) source).markers.getOrDefault(regionId, List.of())
+				: store.getGroundMarkers(regionId);
 	}
 
 	private static List<GroundMarkerPoint> unconverted(List<GroundMarkerPoint> markers, List<GroundMarkerPoint> tiles)
@@ -366,8 +427,9 @@ class GroundMarkerImportDialog extends JDialog
 		int overlapping = toConvert.size() - clean.size();
 
 		Object source = sourceCombo.getSelectedItem();
-		String from = source instanceof ProfileGroundMarkers.Source
-				? " from profile \"" + ((ProfileGroundMarkers.Source) source).getName() + "\"" : "";
+		String from = source instanceof ChosenProfiles
+				? " from " + (((ChosenProfiles) source).names.size() == 1 ? "profile " : "profiles ")
+						+ String.join(", ", ((ChosenProfiles) source).names) : "";
 		String what = "Convert " + plural(toConvert.size(), "ground marker") + from
 				+ " into BA Tiles on this profile, shown on all waves for all roles?";
 		if (overlapping == 0)
