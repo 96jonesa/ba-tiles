@@ -52,8 +52,10 @@ If you have marked BA tiles with RuneLite's Ground Markers plugin, click **Impor
 sidebar panel. A pop-up shows your ground markers on the arena map, for waves 1-9 and for wave 10, with a count of how
 many are on each map and how many are not yet BA Tiles. Ground markers that already have their BA Tile are shown faded.
 
-- **Ground markers from** picks where the ground markers come from: this profile, or any of your other RuneLite
-  profiles. Either way, they are converted into BA Tiles on the profile you are using now; other profiles are only
+- **Ground markers from** picks where the ground markers come from: this profile, or other RuneLite profiles. For
+  other profiles, click **Choose profile files** and pick their files; the window shows the folder they are in
+  (`.runelite/profiles2`, with a **Copy path** button), and you can pick several at once, e.g. one profile per BA role.
+  Either way, the markers are converted into BA Tiles on the profile you are using now; the picked files are only
   read, never changed.
 - Click markers to select them, then **Convert selected**, or use **Convert all new on both maps**.
 - Markers with an orange corner are on a tile that already has a different BA Tile (another color, label, waves or
