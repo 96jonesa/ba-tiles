@@ -2,12 +2,8 @@ package com.batiles;
 
 import com.google.common.base.Strings;
 import com.google.gson.Gson;
-import java.io.File;
-import java.io.FileInputStream;
 import java.io.IOException;
-import java.io.InputStreamReader;
 import java.io.Reader;
-import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
@@ -17,6 +13,7 @@ import java.util.Properties;
 import lombok.Value;
 import net.runelite.client.config.ConfigProfile;
 import net.runelite.client.config.ProfileManager;
+import net.runelite.client.util.Filepath;
 
 /**
  * Reads the Ground Markers plugin's arena markers from another RuneLite profile, for converting them into BA Tiles
@@ -37,7 +34,7 @@ final class ProfileGroundMarkers
 	static class Source
 	{
 		String name;
-		File file;
+		Filepath file;
 
 		@Override
 		public String toString()
@@ -59,7 +56,9 @@ final class ProfileGroundMarkers
 			{
 				if (!profile.isInternal() && !profile.isActive())
 				{
-					sources.add(new Source(profile.getName(), ProfileManager.profileConfigFile(profile)));
+					// other profiles' files are outside this plugin's directory, so they can only be reached unchecked
+					sources.add(new Source(profile.getName(),
+							Filepath.Unchecked.getRooted(ProfileManager.profileConfigFile(profile).toPath())));
 				}
 			}
 		}
@@ -73,11 +72,11 @@ final class ProfileGroundMarkers
 	 * @return markers by region id; regions without markers are omitted
 	 * @throws IOException if the profile's file cannot be read
 	 */
-	static Map<Integer, List<GroundMarkerPoint>> readMarkers(File profileFile, Gson gson, int... regionIds) throws IOException
+	static Map<Integer, List<GroundMarkerPoint>> readMarkers(Filepath profileFile, Gson gson, int... regionIds) throws IOException
 	{
 		Properties properties = new Properties();
-		// the same encoding RuneLite writes profiles in
-		try (Reader reader = new InputStreamReader(new FileInputStream(profileFile), StandardCharsets.UTF_8))
+		// openReader reads UTF-8, the encoding RuneLite writes profiles in
+		try (Reader reader = profileFile.openReader())
 		{
 			properties.load(reader);
 		}
