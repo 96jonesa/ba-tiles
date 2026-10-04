@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Properties;
 import net.runelite.http.api.RuneLiteAPI;
+import net.runelite.client.util.Filepath;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.experimental.runners.Enclosed;
@@ -26,14 +27,15 @@ public class ProfileGroundMarkersTest
 	/**
 	 * Writes a profile file the way RuneLite does (a UTF-8 Properties file).
 	 */
-	private static File writeProfile(TemporaryFolder folder, Properties properties) throws Exception
+	private static Filepath writeProfile(TemporaryFolder folder, Properties properties) throws Exception
 	{
 		File file = folder.newFile("profile-1.properties");
 		try (Writer writer = new OutputStreamWriter(new FileOutputStream(file), StandardCharsets.UTF_8))
 		{
 			properties.store(writer, "RuneLite configuration");
 		}
-		return file;
+		// as the plugin gets other profiles' files
+		return Filepath.Unchecked.getRooted(file.toPath());
 	}
 
 	public static class ReadMarkers
