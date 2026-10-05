@@ -11,7 +11,9 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.Set;
 import java.util.TreeMap;
+import java.util.TreeSet;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.UnaryOperator;
@@ -35,6 +37,7 @@ class BATilesStore
 	private static final String SHOW_BASE_WITH_PRESET_PREFIX = "showBaseWithPreset_";
 	private static final String LINEUPS_KEY = "lineups";
 	private static final String ACTIVE_LINEUP_PREFIX = "activeLineup_";
+	private static final String BA_UTILITIES_IMPORTED_KEY = "baUtilitiesImported";
 	static final int WAVES = 10;
 
 	private final ConfigAccess config;
@@ -497,6 +500,32 @@ class BATilesStore
 		return lineup;
 	}
 
+	/**
+	 * Stores the lineup, keeping its id, unless a lineup with that id already exists.
+	 */
+	void addLineupIfAbsent(Lineup lineup)
+	{
+		if (getLineup(lineup.getId()).isPresent())
+		{
+			return;
+		}
+		List<Lineup> lineups = new ArrayList<>(getLineups());
+		lineups.add(lineup);
+		saveLineups(lineups);
+		fireChanged();
+	}
+
+	/**
+	 * Replaces the stored lineup with the same id's wave presets, keeping its name.
+	 */
+	void updateLineupPresets(String id, Map<Integer, String> presetIds)
+	{
+		saveLineups(getLineups().stream()
+				.map(l -> l.getId().equals(id) ? l.withPresetIds(new TreeMap<>(presetIds)) : l)
+				.collect(Collectors.toList()));
+		fireChanged();
+	}
+
 	void renameLineup(Lineup lineup, String name)
 	{
 		saveLineups(getLineups().stream()
@@ -568,5 +597,41 @@ class BATilesStore
 		Map<Integer, String> kept = new TreeMap<>(presetIds);
 		kept.values().removeIf(presetId::equals);
 		return kept;
+	}
+
+	// ---- BA Utilities ----
+
+	/**
+	 * @return BA Utilities' saved tile setup on the current profile (its raw JSON), or null if it has none
+	 */
+	@Nullable
+	String getBaUtilitiesSetupJson()
+	{
+		return Strings.emptyToNull(config.get(BaUtilitiesData.CONFIG_GROUP, BaUtilitiesData.STORE_KEY));
+	}
+
+	/**
+	 * @return keys of things BA Utilities imports have added that carry no id of their own (GLOBAL tiles)
+	 */
+	Set<String> getBaUtilitiesImportedKeys()
+	{
+		String json = config.get(BATilesConfig.BA_TILES_CONFIG_GROUP, BA_UTILITIES_IMPORTED_KEY);
+		if (Strings.isNullOrEmpty(json))
+		{
+			return new TreeSet<>();
+		}
+		// CHECKSTYLE:OFF
+		List<String> keys = gson.fromJson(json, new TypeToken<List<String>>(){}.getType());
+		// CHECKSTYLE:ON
+		return keys == null ? new TreeSet<>() : new TreeSet<>(keys);
+	}
+
+	void addBaUtilitiesImportedKeys(Collection<String> keys)
+	{
+		Set<String> all = getBaUtilitiesImportedKeys();
+		if (all.addAll(keys))
+		{
+			config.set(BATilesConfig.BA_TILES_CONFIG_GROUP, BA_UTILITIES_IMPORTED_KEY, gson.toJson(new ArrayList<>(all)));
+		}
 	}
 }

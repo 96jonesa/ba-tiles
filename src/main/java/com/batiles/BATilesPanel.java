@@ -38,6 +38,7 @@ class BATilesPanel extends PluginPanel
 	private final BATilesStore store;
 	private final Supplier<TileMapEditor> editor;
 	private final Supplier<GroundMarkerImportDialog> importDialog;
+	private final Supplier<BaUtilitiesImportDialog> baUtilitiesDialog;
 	private final Gson gson;
 	private final Runnable storeListener = () -> SwingUtilities.invokeLater(this::refresh);
 
@@ -53,8 +54,9 @@ class BATilesPanel extends PluginPanel
 	private boolean refreshing;
 
 	BATilesPanel(BATilesStore store, Supplier<TileMapEditor> editor, Supplier<GroundMarkerImportDialog> importDialog,
-				 Gson gson)
+				 Supplier<BaUtilitiesImportDialog> baUtilitiesDialog, Gson gson)
 	{
+		this.baUtilitiesDialog = baUtilitiesDialog;
 		this.store = store;
 		this.editor = editor;
 		this.importDialog = importDialog;
@@ -77,6 +79,11 @@ class BATilesPanel extends PluginPanel
 		importGroundMarkers.setToolTipText("Convert Ground Markers markers in the arena into BA Tiles");
 		importGroundMarkers.addActionListener(e -> importDialog.get().open());
 		top.add(importGroundMarkers);
+
+		JButton importBaUtilities = new JButton("Import from BA Utilities");
+		importBaUtilities.setToolTipText("Bring BA Utilities' tile strategies, sets and assignment presets into BA Tiles");
+		importBaUtilities.addActionListener(e -> baUtilitiesDialog.get().open());
+		top.add(importBaUtilities);
 
 		JPanel backup = new JPanel(new GridLayout(1, 2, 6, 0));
 		JButton exportAll = new JButton("Export all");
