@@ -66,9 +66,10 @@ If you have marked BA tiles with RuneLite's Ground Markers plugin, click **Impor
 sidebar panel. A pop-up shows your ground markers on the arena map, for waves 1-9 and for wave 10, with a count of how
 many are on each map and how many are not yet BA Tiles. Ground markers that already have their BA Tile are shown faded.
 
-- **Ground markers from** picks where the ground markers come from: this profile, or any of your other RuneLite
-  profiles. Either way, they are converted into BA Tiles on the profile you are using now; other profiles are only
-  read, never changed.
+- It uses the ground markers of the profile you are using. To bring in ground markers from another RuneLite profile,
+  use the Ground Markers plugin's own **Export** / **Import** (right-click the world map orb) to copy them over first.
+  Its Export only copies the markers of the area you are in, so export while in the Barbarian Assault arena (and,
+  for wave 10's markers, during wave 10).
 - Click markers to select them, then **Convert selected**, or use **Convert all new on both maps**.
 - Markers with an orange corner are on a tile that already has a different BA Tile (another color, label, waves or
   roles). If any are included when you convert, the confirmation lets you convert them anyway or skip them.
