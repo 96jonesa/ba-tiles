@@ -32,6 +32,7 @@ import net.runelite.client.ui.PluginPanel;
 class BATilesPanel extends PluginPanel
 {
 	private static final int WAVES = 10;
+	private static final String NO_LINEUP = "No lineup";
 	private static final String SHOW_BASE_TOOLTIP = "Show tiles that are not part of a preset while this wave's preset is active";
 
 	private final BATilesStore store;
@@ -41,6 +42,10 @@ class BATilesPanel extends PluginPanel
 	private final Runnable storeListener = () -> SwingUtilities.invokeLater(this::refresh);
 
 	private final JComboBox<BARole> roleCombo = new JComboBox<>(BARole.values());
+	private final JComboBox<Object> lineupCombo = new JComboBox<>();
+	private final JButton saveLineupButton = new JButton("Save");
+	private final JButton renameLineupButton = new JButton("Rename");
+	private final JButton deleteLineupButton = new JButton("Delete");
 	private final List<JComboBox<Object>> presetCombos = new ArrayList<>();
 	private final List<JCheckBox> showBaseBoxes = new ArrayList<>();
 	// the editor opens on the in-game wave
@@ -86,6 +91,20 @@ class BATilesPanel extends PluginPanel
 
 		top.add(new JLabel("Active strategy presets"));
 		top.add(roleCombo);
+		JPanel lineupRow = new JPanel(new BorderLayout(6, 0));
+		lineupRow.add(new JLabel("Lineup"), BorderLayout.WEST);
+		lineupRow.add(lineupCombo, BorderLayout.CENTER);
+		top.add(lineupRow);
+		for (JButton button : new JButton[]{saveLineupButton, renameLineupButton, deleteLineupButton})
+		{
+			// the sidebar is narrow; the default margins cut "Rename" off
+			button.setMargin(new Insets(2, 2, 2, 2));
+		}
+		JPanel lineupButtons = new JPanel(new GridLayout(1, 3, 4, 0));
+		lineupButtons.add(saveLineupButton);
+		lineupButtons.add(renameLineupButton);
+		lineupButtons.add(deleteLineupButton);
+		top.add(lineupButtons);
 
 		JPanel waves = new JPanel(new GridBagLayout());
 		GridBagConstraints c = new GridBagConstraints();
@@ -144,6 +163,28 @@ class BATilesPanel extends PluginPanel
 		add(column, BorderLayout.NORTH);
 
 		roleCombo.addActionListener(e -> refresh());
+		lineupCombo.setToolTipText("A lineup sets this role's preset for every wave at once."
+				+ " Changing any wave's preset afterwards means no lineup is active.");
+		saveLineupButton.setToolTipText("Save this role's current presets, for every wave, as a new lineup");
+		lineupCombo.addActionListener(e ->
+		{
+			if (refreshing)
+			{
+				return;
+			}
+			Object item = lineupCombo.getSelectedItem();
+			if (item instanceof Lineup)
+			{
+				store.applyLineup((Lineup) item);
+			}
+			else
+			{
+				store.clearActiveLineup(role());
+			}
+		});
+		saveLineupButton.addActionListener(e -> saveLineup());
+		renameLineupButton.addActionListener(e -> activeLineup().ifPresent(this::renameLineup));
+		deleteLineupButton.addActionListener(e -> activeLineup().ifPresent(this::deleteLineup));
 		store.addListener(storeListener);
 		refresh();
 	}
@@ -206,6 +247,69 @@ class BATilesPanel extends PluginPanel
 		}
 	}
 
+	private java.util.Optional<Lineup> activeLineup()
+	{
+		return store.getLineup(store.getActiveLineupId(role()));
+	}
+
+	private void saveLineup()
+	{
+		String name = promptForLineupName("Save " + roleCombo.getSelectedItem() + " lineup", "", null);
+		if (name != null)
+		{
+			store.saveCurrentAsLineup(name, role());
+		}
+	}
+
+	private void renameLineup(Lineup lineup)
+	{
+		String name = promptForLineupName("Rename lineup", lineup.getName(), lineup);
+		if (name != null)
+		{
+			store.renameLineup(lineup, name);
+		}
+	}
+
+	private void deleteLineup(Lineup lineup)
+	{
+		int result = JOptionPane.showConfirmDialog(this,
+				html("Delete lineup \"" + lineup.getName() + "\"? Its presets stay active; only the lineup is removed."),
+				"Delete lineup", JOptionPane.OK_CANCEL_OPTION, JOptionPane.WARNING_MESSAGE);
+		if (result == JOptionPane.OK_OPTION)
+		{
+			store.deleteLineup(lineup);
+		}
+	}
+
+	/**
+	 * Asks for a lineup name, asking again while the role already has a lineup with that name.
+	 *
+	 * @param renaming the lineup being renamed (which may keep its own name), or null for a new lineup
+	 * @return the name, or null if cancelled
+	 */
+	private String promptForLineupName(String title, String initial, Lineup renaming)
+	{
+		String prompt = "Name";
+		String value = initial;
+		while (true)
+		{
+			String name = (String) JOptionPane.showInputDialog(this, prompt, title, JOptionPane.PLAIN_MESSAGE, null, null, value);
+			name = name == null ? null : name.trim();
+			if (name == null || name.isEmpty())
+			{
+				return null;
+			}
+			boolean ownName = renaming != null && renaming.getName().equalsIgnoreCase(name);
+			if (ownName || !store.hasLineupNamed(role(), name))
+			{
+				return name;
+			}
+			prompt = html("The " + roleCombo.getSelectedItem() + " role already has a lineup called \"" + name
+					+ "\". Choose another name.");
+			value = name;
+		}
+	}
+
 	private void message(String text, int type)
 	{
 		JOptionPane.showMessageDialog(this, html(text), "BA Tiles", type);
@@ -236,6 +340,21 @@ class BATilesPanel extends PluginPanel
 		refreshing = true;
 		try
 		{
+			lineupCombo.removeAllItems();
+			lineupCombo.addItem(NO_LINEUP);
+			Object activeLineup = NO_LINEUP;
+			String activeLineupId = store.getActiveLineupId(role());
+			for (Lineup lineup : store.getLineups(role()))
+			{
+				lineupCombo.addItem(lineup);
+				if (lineup.getId().equals(activeLineupId))
+				{
+					activeLineup = lineup;
+				}
+			}
+			lineupCombo.setSelectedItem(activeLineup);
+			renameLineupButton.setEnabled(activeLineup instanceof Lineup);
+			deleteLineupButton.setEnabled(activeLineup instanceof Lineup);
 			for (int i = 0; i < WAVES; i++)
 			{
 				int wave = i + 1;

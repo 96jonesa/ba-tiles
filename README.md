@@ -43,6 +43,15 @@ wave and role. At most one preset is active per wave / role, and "No preset" is 
   preset. Whether they are also shown alongside an active preset is set per wave and role: the **Others** checkbox
   next to each wave's preset selector in the sidebar panel, or the matching checkbox in the editor. It is on by default.
 
+### Lineups
+
+A lineup is a named choice of preset for every wave, for one role; for example, a "69 setup" and a "66 setup" for
+Defender. In the sidebar panel, pick a role, set up its wave presets, and click **Save** under the lineup selector to
+save them as a lineup. Choosing a lineup later switches every wave's preset for that role at once; waves the lineup
+has no preset for get none. Changing any wave's preset by hand afterwards means no lineup is active (the selector
+shows "No lineup"), until you choose one again. **Rename** and **Delete** act on the active lineup; deleting one keeps
+its presets active.
+
 **Export** in the editor copies the active preset and its tiles to the clipboard, and **Import** adds tiles and presets
 from the clipboard.
 
