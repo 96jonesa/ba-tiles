@@ -9,21 +9,18 @@ import java.awt.GridBagConstraints;
 import java.awt.GridBagLayout;
 import java.awt.Insets;
 import java.awt.Window;
-import java.io.IOException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.TreeSet;
-import java.util.function.Supplier;
 import java.util.stream.Collectors;
 import javax.swing.BorderFactory;
 import javax.swing.Box;
 import javax.swing.BoxLayout;
 import javax.swing.JButton;
 import javax.swing.JCheckBox;
-import javax.swing.JComboBox;
 import javax.swing.JDialog;
 import javax.swing.JLabel;
 import javax.swing.JOptionPane;
@@ -45,17 +42,14 @@ import net.runelite.client.ui.ColorScheme;
 @Slf4j
 class BaUtilitiesImportDialog extends JDialog
 {
-	private static final String THIS_PROFILE = "This profile";
 	private static final Color ERROR_COLOR = new Color(255, 110, 110);
 	private static final String[] ROLE_LETTERS = {"A", "C", "D", "H"};
 
 	private final BATilesStore store;
-	private final Supplier<List<ProfileGroundMarkers.Source>> otherProfiles;
 	private final Gson gson;
 	// names can be taken from the sidebar or editor while this window is open
 	private final Runnable storeListener = () -> SwingUtilities.invokeLater(this::update);
 
-	private final JComboBox<Object> sourceCombo = new JComboBox<>();
 	private final JLabel summary = new JLabel();
 	private final JPanel strategiesPanel = new JPanel(new GridBagLayout());
 	private final JPanel lineupsPanel = new JPanel(new GridBagLayout());
@@ -66,26 +60,17 @@ class BaUtilitiesImportDialog extends JDialog
 	private final List<StrategyRow> strategyRows = new ArrayList<>();
 	private final List<LineupRow> lineupRows = new ArrayList<>();
 	private boolean updating;
-	private boolean refreshingSources;
 
-	BaUtilitiesImportDialog(Window owner, BATilesStore store, Supplier<List<ProfileGroundMarkers.Source>> otherProfiles, Gson gson)
+	BaUtilitiesImportDialog(Window owner, BATilesStore store, Gson gson)
 	{
 		super(owner, "Import from BA Utilities", ModalityType.MODELESS);
 		this.store = store;
-		this.otherProfiles = otherProfiles;
 		this.gson = gson;
 		setDefaultCloseOperation(WindowConstants.HIDE_ON_CLOSE);
 
-		JPanel source = new JPanel(new FlowLayout(FlowLayout.LEFT, 6, 0));
-		source.add(new JLabel("BA Utilities setup from"));
-		source.add(sourceCombo);
-		sourceCombo.addActionListener(e ->
-		{
-			if (!refreshingSources)
-			{
-				load();
-			}
-		});
+		JLabel source = new JLabel("<html>Imports this profile's BA Utilities tile setup (only read, never changed),"
+				+ " along with BA Utilities' built-in strategies and lineups.</html>");
+		source.setForeground(ColorScheme.LIGHT_GRAY_COLOR);
 
 		JPanel lists = new JPanel();
 		lists.setLayout(new BoxLayout(lists, BoxLayout.Y_AXIS));
@@ -141,7 +126,6 @@ class BaUtilitiesImportDialog extends JDialog
 
 	void open()
 	{
-		refreshSources();
 		load();
 		setVisible(true);
 		toFront();
@@ -166,53 +150,22 @@ class BaUtilitiesImportDialog extends JDialog
 		return label;
 	}
 
-	private void refreshSources()
-	{
-		Object current = sourceCombo.getSelectedItem();
-		refreshingSources = true;
-		try
-		{
-			sourceCombo.removeAllItems();
-			sourceCombo.addItem(THIS_PROFILE);
-			try
-			{
-				otherProfiles.get().forEach(sourceCombo::addItem);
-			}
-			catch (RuntimeException ex)
-			{
-				log.warn("Unable to list RuneLite profiles", ex);
-			}
-			// the first item (this profile) stays selected if the previous choice no longer exists
-			if (current != null)
-			{
-				sourceCombo.setSelectedItem(current);
-			}
-		}
-		finally
-		{
-			refreshingSources = false;
-		}
-	}
-
 	/**
-	 * Reads the selected profile's BA Utilities setup and rebuilds the lists with the default choices.
+	 * Reads this profile's BA Utilities setup and rebuilds the lists with the default choices.
 	 */
 	private void load()
 	{
-		Object source = sourceCombo.getSelectedItem();
 		BaUtilitiesData.Store saved = null;
 		try
 		{
-			String json = source instanceof ProfileGroundMarkers.Source
-					? ProfileGroundMarkers.readBaUtilitiesSetupJson(((ProfileGroundMarkers.Source) source).getFile())
-					: store.getBaUtilitiesSetupJson();
+			String json = store.getBaUtilitiesSetupJson();
 			saved = json == null ? null : gson.fromJson(json, BaUtilitiesData.Store.class);
 		}
-		catch (IOException | JsonParseException | IllegalStateException ex)
+		catch (JsonParseException | IllegalStateException ex)
 		{
 			log.warn("Unable to read BA Utilities' setup", ex);
-			JOptionPane.showMessageDialog(this, "Unable to read BA Utilities' setup from " + source
-					+ ". Only BA Utilities' built-in strategies and lineups can be imported.", getTitle(), JOptionPane.WARNING_MESSAGE);
+			JOptionPane.showMessageDialog(this, "Unable to read BA Utilities' setup on this profile."
+					+ " Only BA Utilities' built-in strategies and lineups can be imported.", getTitle(), JOptionPane.WARNING_MESSAGE);
 		}
 
 		plan = BaUtilitiesImport.plan(saved);
