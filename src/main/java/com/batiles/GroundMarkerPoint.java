@@ -35,11 +35,27 @@ class GroundMarkerPoint
      */
     @Nullable
     private String presetId;
+    /**
+     * When set, the tile is filled with its own color at this opacity (0-100) instead of the default black fill.
+     */
+    @Nullable
+    private Integer fillOpacityPercent;
+    /**
+     * The tile's own border width, or null for the plugin's Border Width.
+     */
+    @Nullable
+    private Float borderWidth;
 
     GroundMarkerPoint(int regionId, int regionX, int regionY, int z, @Nullable Color color, @Nullable String label,
                       @Nullable List<Integer> waves, @Nullable List<String> roles)
     {
         this(regionId, regionX, regionY, z, color, label, waves, roles, null);
+    }
+
+    GroundMarkerPoint(int regionId, int regionX, int regionY, int z, @Nullable Color color, @Nullable String label,
+                      @Nullable List<Integer> waves, @Nullable List<String> roles, @Nullable String presetId)
+    {
+        this(regionId, regionX, regionY, z, color, label, waves, roles, presetId, null, null);
     }
 
     boolean isPresetTile()

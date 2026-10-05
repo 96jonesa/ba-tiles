@@ -31,6 +31,8 @@ import javax.swing.JPanel;
 import javax.swing.JRadioButton;
 import javax.swing.JScrollPane;
 import javax.swing.JSlider;
+import javax.swing.JSpinner;
+import javax.swing.SpinnerNumberModel;
 import javax.swing.JTextField;
 import javax.swing.SwingUtilities;
 import javax.swing.WindowConstants;
@@ -79,6 +81,12 @@ class TileMapEditor extends JDialog
 	private final JComboBox<MarkerOption> markerCombo = new JComboBox<>();
 	private final JButton addMarkerButton = new JButton("Add another marker here");
 	private final ColorJButton colorButton = new ColorJButton("Color", Color.YELLOW);
+	private final JCheckBox ownFillBox = new JCheckBox("Fill with tile color");
+	private final JSlider fillOpacitySlider = new JSlider(TileStyle.MIN_FILL_OPACITY_PERCENT, TileStyle.MAX_FILL_OPACITY_PERCENT, 25);
+	private final JLabel fillOpacityValue = new JLabel();
+	private final JCheckBox ownBorderBox = new JCheckBox("Own border width");
+	private final JSpinner borderWidthSpinner = new JSpinner(new SpinnerNumberModel(
+			2.0, (double) TileStyle.MIN_BORDER_WIDTH, (double) TileStyle.MAX_BORDER_WIDTH, 0.5));
 	private final JTextField labelField = new JTextField();
 	private final JPanel wavesPanel = new JPanel(new GridLayout(2, 5));
 	private final List<JCheckBox> waveBoxes = new ArrayList<>();
@@ -249,6 +257,20 @@ class TileMapEditor extends JDialog
 		markerDetails.add(Box.createVerticalStrut(8));
 		markerDetails.add(leftAligned(colorButton));
 		markerDetails.add(Box.createVerticalStrut(8));
+		ownFillBox.setToolTipText("Fill the tile with its own color instead of the default black fill (Fill Opacity)");
+		markerDetails.add(leftAligned(ownFillBox));
+		JPanel fillRow = new JPanel(new BorderLayout(6, 0));
+		fillRow.add(fillOpacitySlider, BorderLayout.CENTER);
+		fillRow.add(fillOpacityValue, BorderLayout.EAST);
+		markerDetails.add(leftAligned(fillRow));
+		ownBorderBox.setToolTipText("Use this border width for the tile instead of the plugin's Border Width");
+		// wide enough for e.g. "0.5" and "2.0"
+		((JSpinner.DefaultEditor) borderWidthSpinner.getEditor()).getTextField().setColumns(3);
+		JPanel borderRow = new JPanel(new BorderLayout(6, 0));
+		borderRow.add(ownBorderBox, BorderLayout.CENTER);
+		borderRow.add(borderWidthSpinner, BorderLayout.EAST);
+		markerDetails.add(leftAligned(borderRow));
+		markerDetails.add(Box.createVerticalStrut(8));
 		markerDetails.add(leftAligned(new JLabel("Label (max " + MAX_LABEL_LENGTH + " characters)")));
 		markerDetails.add(leftAligned(labelField));
 		markerDetails.add(Box.createVerticalStrut(8));
@@ -296,6 +318,18 @@ class TileMapEditor extends JDialog
 		});
 		addMarkerButton.addActionListener(e -> addMarker(selectedMapX, selectedMapY));
 		colorButton.addActionListener(e -> pickColor());
+		ownFillBox.addActionListener(e -> applyFill());
+		fillOpacitySlider.addChangeListener(e ->
+		{
+			fillOpacityValue.setText(fillOpacitySlider.getValue() + "%");
+			// one write when the drag ends, not one per pixel
+			if (!fillOpacitySlider.getValueIsAdjusting())
+			{
+				applyFill();
+			}
+		});
+		ownBorderBox.addActionListener(e -> applyBorderWidth());
+		borderWidthSpinner.addChangeListener(e -> applyBorderWidth());
 		labelField.addActionListener(e -> applyLabel());
 		labelField.addFocusListener(new FocusAdapter()
 		{
@@ -421,6 +455,18 @@ class TileMapEditor extends JDialog
 		}
 
 		colorButton.setColor(selected.getColor() == null ? config.markerColor() : selected.getColor());
+		boolean ownFill = selected.getFillOpacityPercent() != null;
+		ownFillBox.setSelected(ownFill);
+		fillOpacitySlider.setEnabled(ownFill);
+		if (ownFill)
+		{
+			fillOpacitySlider.setValue(selected.getFillOpacityPercent());
+		}
+		fillOpacityValue.setText(fillOpacitySlider.getValue() + "%");
+		boolean ownBorder = selected.getBorderWidth() != null;
+		ownBorderBox.setSelected(ownBorder);
+		borderWidthSpinner.setEnabled(ownBorder);
+		borderWidthSpinner.setValue((double) TileStyle.borderWidth(selected.getBorderWidth(), config.borderWidth()));
 		// don't clobber a label being typed, unless the selection moved on to another marker
 		if (!labelField.isFocusOwner() || !selected.equals(labelShownFor))
 		{
@@ -621,6 +667,20 @@ class TileMapEditor extends JDialog
 		RuneliteColorPicker picker = colorPickerManager.create(this, colorButton.getColor(), "Tile marker color", false);
 		picker.setOnClose(color -> updatePoint(target, p -> p.withColor(color)));
 		picker.setVisible(true);
+	}
+
+	private void applyFill()
+	{
+		Integer percent = ownFillBox.isSelected() ? fillOpacitySlider.getValue() : null;
+		fillOpacitySlider.setEnabled(percent != null);
+		updateSelected(p -> Objects.equals(p.getFillOpacityPercent(), percent) ? p : p.withFillOpacityPercent(percent));
+	}
+
+	private void applyBorderWidth()
+	{
+		Float width = ownBorderBox.isSelected() ? ((Number) borderWidthSpinner.getValue()).floatValue() : null;
+		borderWidthSpinner.setEnabled(width != null);
+		updateSelected(p -> Objects.equals(p.getBorderWidth(), width) ? p : p.withBorderWidth(width));
 	}
 
 	private void applyLabel()

@@ -21,6 +21,11 @@ sidebar panel and click **Open tile map editor** to open the editor in a pop-up 
 - **Left-click** a tile to mark it, or to select the marker already on it. **Right-click** a tile to delete its markers.
 - With a marker selected, set its color and label, and (for tiles that are not part of a strategy preset) the
   waves and roles it is shown on. A tile marked from the map starts out shown only for the selected wave and role.
+- By default a tile is drawn like any BA Tile: an outline in its color, filled black at the plugin's **Fill Opacity**,
+  with the plugin's **Border Width**. In the editor, a tile can instead be **filled with its own color** at an opacity
+  you choose, and can have its **own border width**.
+- If several BA Tiles shown at the same time on one tile look exactly the same (same color, label, fill and border
+  width), only one is drawn. Tiles that differ in any way are all drawn, on top of each other.
 - **Add another marker here** puts a second marker on the same tile, e.g. with a different label for another wave.
 - The map shows the arena's landmarks (cannons, traps, caves, dispensers, logs, hammer, start tiles, and the
   queen's trapdoor on wave 10), and can be zoomed or narrowed to the east side of the arena.
