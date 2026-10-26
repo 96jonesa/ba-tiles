@@ -19,6 +19,8 @@ sidebar panel and click **Open tile map editor** to open the editor in a pop-up 
 
 - Pick a wave (1-9 share one arena map; wave 10 has its own) and a role.
 - **Left-click** a tile to mark it, or to select the marker already on it. **Right-click** a tile to delete its markers.
+  Any tile in the arena can be marked, as in game, including ones with objects on them (cannons, rocks, cones, ...),
+  which the map draws dark. The perimeter and the area outside it can't be marked.
 - With a marker selected, set its color and label, and (for tiles that are not part of a strategy preset) the
   waves and roles it is shown on. A tile marked from the map starts out shown only for the selected wave and role.
 - **Add another marker here** puts a second marker on the same tile, e.g. with a different label for another wave.
