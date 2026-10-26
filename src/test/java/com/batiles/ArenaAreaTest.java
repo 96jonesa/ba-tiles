@@ -31,8 +31,9 @@ public class ArenaAreaTest
 		@Test
 		public void areaSizesArePinned()
 		{
-			assertEquals(1259, count(ArenaMapLayout.WAVES_1_TO_9));
-			assertEquals(1373, count(ArenaMapLayout.WAVE_10));
+			// walkable tiles (1070 / 1117) plus the unwalkable tiles the arena encloses (15 / 69)
+			assertEquals(1085, count(ArenaMapLayout.WAVES_1_TO_9));
+			assertEquals(1186, count(ArenaMapLayout.WAVE_10));
 		}
 
 		@Test
@@ -54,16 +55,28 @@ public class ArenaAreaTest
 		}
 
 		@Test
-		public void includesUnwalkableLandmarksInAndOnTheWalls()
+		public void includesUnwalkableTilesTheArenaEncloses()
 		{
-			ArenaMapLayout map = ArenaMapLayout.WAVES_1_TO_9;
-			// cannons (enclosed), dispensers (in the south wall), horn of glory
-			for (int[] tile : new int[][]{{21, 26}, {40, 26}, {33, 6}, {34, 6}, {35, 6}, {36, 6}, {52, 10}})
+			// the cannons
+			for (int[] tile : new int[][]{{21, 26}, {40, 26}})
 			{
-				assertFalse(BaArenaMapTopology.isUsableTile(map, tile[0], tile[1]));
-				assertTrue(tile[0] + "," + tile[1], ArenaArea.contains(map, tile[0], tile[1]));
+				assertFalse(BaArenaMapTopology.isUsableTile(ArenaMapLayout.WAVES_1_TO_9, tile[0], tile[1]));
+				assertTrue(tile[0] + "," + tile[1], ArenaArea.contains(ArenaMapLayout.WAVES_1_TO_9, tile[0], tile[1]));
 			}
-			assertTrue(ArenaArea.contains(ArenaMapLayout.WAVE_10, 34, 6));
+			assertTrue(ArenaArea.contains(ArenaMapLayout.WAVE_10, 21, 26));
+		}
+
+		@Test
+		public void excludesThePerimeterAndBeyond()
+		{
+			// the dispensers and the horn sit on the perimeter, just outside the walkable area
+			for (int[] tile : new int[][]{{33, 6}, {34, 6}, {35, 6}, {36, 6}, {52, 10}})
+			{
+				assertFalse(tile[0] + "," + tile[1], ArenaArea.contains(ArenaMapLayout.WAVES_1_TO_9, tile[0], tile[1]));
+			}
+			// the ring just beyond the walkable edge: row 25's westernmost walkable tile is x 14
+			assertTrue(BaArenaMapTopology.isUsableTile(ArenaMapLayout.WAVES_1_TO_9, 14, 25));
+			assertFalse(ArenaArea.contains(ArenaMapLayout.WAVES_1_TO_9, 13, 25));
 		}
 
 		@Test
