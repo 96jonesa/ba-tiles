@@ -112,7 +112,9 @@ class ArenaMapPanel extends JPanel
 				int x = toMapX(event.getX());
 				int y = toMapY(event.getY());
 
-				if (isSelectableMapTile(currentLayout(), x, y))
+				// any tile of the arena can be marked, as in game: including ones with objects on them (cannons,
+				// dispensers, cones, ...), which the walkable-tile table leaves out; not the area outside the walls
+				if (mapBounds().contains(x, y) && ArenaArea.contains(currentLayout(), x, y))
 				{
 					tileClicked.accept(x, y, event);
 				}
@@ -141,7 +143,10 @@ class ArenaMapPanel extends JPanel
 		return tileSizeSupplier.getAsInt();
 	}
 
-	boolean isSelectableMapTile(ArenaMapLayout layout, int mapX, int mapY)
+	/**
+	 * @return whether the tile is in view and walkable; other tiles are drawn dark, but can still be marked
+	 */
+	private boolean isWalkableMapTile(ArenaMapLayout layout, int mapX, int mapY)
 	{
 		if (!mapBounds().contains(mapX, mapY)) return false;
 
@@ -201,7 +206,7 @@ class ArenaMapPanel extends JPanel
 				GroundMarkerPoint point = marker.getPoint();
 				int mapX = layout.toMapX(point);
 				int mapY = layout.toMapY(point);
-				if (!layout.contains(point) || !mapBounds().contains(mapX, mapY) || !isSelectableMapTile(layout, mapX, mapY)) continue;
+				if (!layout.contains(point) || !mapBounds().contains(mapX, mapY)) continue;
 
 				int x = toScreenX(mapX);
 				int y = toScreenY(mapY);
@@ -418,7 +423,7 @@ class ArenaMapPanel extends JPanel
 		{
 			for (int y = bounds.minY; y < bounds.maxY; y++)
 			{
-				if (isSelectableMapTile(layout, x, y)) continue;
+				if (isWalkableMapTile(layout, x, y)) continue;
 
 				graphics.setColor(DISABLED_TILE_COLOR);
 				graphics.fillRect(toScreenX(x), toScreenY(y), tileSize, tileSize);
