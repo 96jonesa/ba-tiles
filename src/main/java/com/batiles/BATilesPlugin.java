@@ -143,6 +143,10 @@ public class BATilesPlugin extends Plugin {
 			Collection<ColorTileMarker> colorTileMarkers = translateToColorTileMarker(pointsToLoad);
 			points.addAll(colorTileMarkers);
 		}
+
+		List<ColorTileMarker> distinct = ColorTileMarker.withoutDuplicates(points);
+		points.clear();
+		points.addAll(distinct);
 	}
 
 	List<Integer> wavesToDisplay() {
@@ -238,11 +242,12 @@ public class BATilesPlugin extends Plugin {
 		return points.stream()
 				.map(point -> new ColorTileMarker(
 						WorldPoint.fromRegion(point.getRegionId(), point.getRegionX(), point.getRegionY(), point.getZ()),
-						point.getColor(), point.getLabel()))
+						point.getColor(), point.getLabel(), point.getFillOpacityPercent(), point.getBorderWidth()))
 				.flatMap(colorTile ->
 				{
 					final Collection<WorldPoint> localWorldPoints = WorldPoint.toLocalInstance(client, colorTile.getWorldPoint());
-					return localWorldPoints.stream().map(wp -> new ColorTileMarker(wp, colorTile.getColor(), colorTile.getLabel()));
+					return localWorldPoints.stream().map(wp -> new ColorTileMarker(wp, colorTile.getColor(), colorTile.getLabel(),
+							colorTile.getFillOpacityPercent(), colorTile.getBorderWidth()));
 				})
 				.collect(Collectors.toList());
 	}

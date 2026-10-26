@@ -48,7 +48,8 @@ public class BATilesOverlay extends Overlay
             return null;
         }
 
-        Stroke stroke = new BasicStroke((float) config.borderWidth());
+        // the plugin's Border Width, used as it always has been (unclamped)
+        Stroke defaultStroke = new BasicStroke((float) config.borderWidth());
         for (final ColorTileMarker point : points)
         {
             WorldPoint worldPoint = point.getWorldPoint();
@@ -64,13 +65,18 @@ public class BATilesOverlay extends Overlay
                 tileColor = config.markerColor();
             }
 
-            drawTile(graphics, worldPoint, tileColor, point.getLabel(), stroke);
+            // a tile's own border width of 0 means no border (a 0-width BasicStroke would still draw a hairline)
+            Stroke stroke = point.getBorderWidth() == null
+                    ? defaultStroke
+                    : TileStyle.hasBorder(point.getBorderWidth()) ? new BasicStroke(TileStyle.borderWidth(point.getBorderWidth(), 0)) : null;
+            Color fill = TileStyle.fill(tileColor, point.getFillOpacityPercent(), config.fillOpacity());
+            drawTile(graphics, worldPoint, tileColor, fill, point.getLabel(), stroke);
         }
 
         return null;
     }
 
-    private void drawTile(Graphics2D graphics, WorldPoint point, Color color, @Nullable String label, Stroke borderStroke)
+    private void drawTile(Graphics2D graphics, WorldPoint point, Color color, Color fill, @Nullable String label, @Nullable Stroke borderStroke)
     {
         WorldPoint playerLocation = client.getLocalPlayer().getWorldLocation();
 
@@ -88,7 +94,15 @@ public class BATilesOverlay extends Overlay
         Polygon poly = Perspective.getCanvasTilePoly(client, lp);
         if (poly != null)
         {
-            OverlayUtil.renderPolygon(graphics, poly, color, new Color(0, 0, 0, config.fillOpacity()), borderStroke);
+            if (borderStroke != null)
+            {
+                OverlayUtil.renderPolygon(graphics, poly, color, fill, borderStroke);
+            }
+            else
+            {
+                graphics.setColor(fill);
+                graphics.fill(poly);
+            }
         }
 
         if (!Strings.isNullOrEmpty(label))
