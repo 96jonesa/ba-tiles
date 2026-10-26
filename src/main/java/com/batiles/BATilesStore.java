@@ -11,6 +11,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
+import java.util.TreeMap;
 import java.util.UUID;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.UnaryOperator;
@@ -32,15 +33,23 @@ class BATilesStore
 	private static final String PRESETS_KEY = "presets";
 	private static final String ACTIVE_PRESET_PREFIX = "activePreset_";
 	private static final String SHOW_BASE_WITH_PRESET_PREFIX = "showBaseWithPreset_";
+	private static final String LINEUPS_KEY = "lineups";
+	private static final String ACTIVE_LINEUP_PREFIX = "activeLineup_";
+	static final int WAVES = 10;
 
-	private final ConfigManager configManager;
+	private final ConfigAccess config;
 	private final Gson gson;
 	private final List<Runnable> listeners = new CopyOnWriteArrayList<>();
 
 	@Inject
 	BATilesStore(ConfigManager configManager, Gson gson)
 	{
-		this.configManager = configManager;
+		this(ConfigAccess.of(configManager), gson);
+	}
+
+	BATilesStore(ConfigAccess config, Gson gson)
+	{
+		this.config = config;
 		this.gson = gson;
 	}
 
@@ -70,7 +79,7 @@ class BATilesStore
 
 	List<GroundMarkerPoint> getPoints(int regionId)
 	{
-		String json = configManager.getConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, REGION_PREFIX + regionId);
+		String json = config.get(BATilesConfig.BA_TILES_CONFIG_GROUP, REGION_PREFIX + regionId);
 		if (Strings.isNullOrEmpty(json))
 		{
 			return Collections.emptyList();
@@ -92,11 +101,11 @@ class BATilesStore
 	{
 		if (points == null || points.isEmpty())
 		{
-			configManager.unsetConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, REGION_PREFIX + regionId);
+			config.unset(BATilesConfig.BA_TILES_CONFIG_GROUP, REGION_PREFIX + regionId);
 		}
 		else
 		{
-			configManager.setConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, REGION_PREFIX + regionId, gson.toJson(points));
+			config.set(BATilesConfig.BA_TILES_CONFIG_GROUP, REGION_PREFIX + regionId, gson.toJson(points));
 		}
 	}
 
@@ -138,7 +147,7 @@ class BATilesStore
 
 	List<StrategyPreset> getPresets()
 	{
-		String json = configManager.getConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, PRESETS_KEY);
+		String json = config.get(BATilesConfig.BA_TILES_CONFIG_GROUP, PRESETS_KEY);
 		if (Strings.isNullOrEmpty(json))
 		{
 			return Collections.emptyList();
@@ -166,11 +175,11 @@ class BATilesStore
 	{
 		if (presets.isEmpty())
 		{
-			configManager.unsetConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, PRESETS_KEY);
+			config.unset(BATilesConfig.BA_TILES_CONFIG_GROUP, PRESETS_KEY);
 		}
 		else
 		{
-			configManager.setConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, PRESETS_KEY, gson.toJson(presets));
+			config.set(BATilesConfig.BA_TILES_CONFIG_GROUP, PRESETS_KEY, gson.toJson(presets));
 		}
 	}
 
@@ -241,9 +250,15 @@ class BATilesStore
 				.collect(Collectors.toList());
 		savePresets(presets);
 
+		// the preset's wave simply has no preset in lineups that used it
+		saveLineups(getLineups().stream()
+				.map(l -> l.getPresetIds().containsValue(preset.getId())
+						? l.withPresetIds(without(l.getPresetIds(), preset.getId())) : l)
+				.collect(Collectors.toList()));
+
 		if (preset.getId().equals(getActivePresetId(preset.getWave(), preset.getRole())))
 		{
-			configManager.unsetConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, activePresetKey(preset.getWave(), preset.getRole()));
+			config.unset(BATilesConfig.BA_TILES_CONFIG_GROUP, activePresetKey(preset.getWave(), preset.getRole()));
 		}
 		fireChanged();
 	}
@@ -261,9 +276,13 @@ class BATilesStore
 	@Nullable
 	String getActivePresetId(int wave, String role)
 	{
-		return Strings.emptyToNull(configManager.getConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, activePresetKey(wave, role)));
+		return Strings.emptyToNull(config.get(BATilesConfig.BA_TILES_CONFIG_GROUP, activePresetKey(wave, role)));
 	}
 
+	/**
+	 * Makes the preset the active one for the wave and role (or none, for null). Changing a wave's preset this way
+	 * means the role no longer follows a lineup.
+	 */
 	void setActivePreset(int wave, String role, @Nullable StrategyPreset preset)
 	{
 		if (Objects.equals(preset == null ? null : preset.getId(), getActivePresetId(wave, role)))
@@ -271,15 +290,21 @@ class BATilesStore
 			return;
 		}
 
-		if (preset == null)
+		writeActivePreset(wave, role, preset == null ? null : preset.getId());
+		config.unset(BATilesConfig.BA_TILES_CONFIG_GROUP, activeLineupKey(role));
+		fireChanged();
+	}
+
+	private void writeActivePreset(int wave, String role, @Nullable String presetId)
+	{
+		if (presetId == null)
 		{
-			configManager.unsetConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, activePresetKey(wave, role));
+			config.unset(BATilesConfig.BA_TILES_CONFIG_GROUP, activePresetKey(wave, role));
 		}
 		else
 		{
-			configManager.setConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, activePresetKey(wave, role), preset.getId());
+			config.set(BATilesConfig.BA_TILES_CONFIG_GROUP, activePresetKey(wave, role), presetId);
 		}
-		fireChanged();
 	}
 
 	// ---- non-preset tiles while a preset is active ----
@@ -295,7 +320,7 @@ class BATilesStore
 	 */
 	boolean isShowBaseWithPreset(int wave, String role)
 	{
-		String value = configManager.getConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, showBaseWithPresetKey(wave, role));
+		String value = config.get(BATilesConfig.BA_TILES_CONFIG_GROUP, showBaseWithPresetKey(wave, role));
 		return value == null || Boolean.parseBoolean(value);
 	}
 
@@ -308,11 +333,11 @@ class BATilesStore
 
 		if (show)
 		{
-			configManager.unsetConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, showBaseWithPresetKey(wave, role));
+			config.unset(BATilesConfig.BA_TILES_CONFIG_GROUP, showBaseWithPresetKey(wave, role));
 		}
 		else
 		{
-			configManager.setConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, showBaseWithPresetKey(wave, role), false);
+			config.set(BATilesConfig.BA_TILES_CONFIG_GROUP, showBaseWithPresetKey(wave, role), "false");
 		}
 		fireChanged();
 	}
@@ -324,7 +349,7 @@ class BATilesStore
 	 */
 	List<GroundMarkerPoint> getGroundMarkers(int regionId)
 	{
-		String json = configManager.getConfiguration(GroundMarkerImport.GROUND_MARKER_CONFIG_GROUP, REGION_PREFIX + regionId);
+		String json = config.get(GroundMarkerImport.GROUND_MARKER_CONFIG_GROUP, REGION_PREFIX + regionId);
 		return Strings.isNullOrEmpty(json) ? Collections.emptyList() : GroundMarkerImport.parse(gson, json);
 	}
 
@@ -364,12 +389,10 @@ class BATilesStore
 	 */
 	BATilesBackup exportAll()
 	{
-		String prefix = BATilesConfig.BA_TILES_CONFIG_GROUP + ".";
 		Map<String, String> entries = new HashMap<>();
-		for (String wholeKey : configManager.getConfigurationKeys(prefix))
+		for (String key : config.keys(BATilesConfig.BA_TILES_CONFIG_GROUP))
 		{
-			String key = wholeKey.substring(prefix.length());
-			String value = configManager.getConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, key);
+			String value = config.get(BATilesConfig.BA_TILES_CONFIG_GROUP, key);
 			if (value != null)
 			{
 				entries.put(key, value);
@@ -385,12 +408,165 @@ class BATilesStore
 	{
 		for (String key : backup.keysToRemove(exportAll().getEntries().keySet()))
 		{
-			configManager.unsetConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, key);
+			config.unset(BATilesConfig.BA_TILES_CONFIG_GROUP, key);
 		}
 		for (Map.Entry<String, String> entry : backup.getEntries().entrySet())
 		{
-			configManager.setConfiguration(BATilesConfig.BA_TILES_CONFIG_GROUP, entry.getKey(), entry.getValue());
+			config.set(BATilesConfig.BA_TILES_CONFIG_GROUP, entry.getKey(), entry.getValue());
 		}
 		fireChanged();
+	}
+
+	// ---- lineups ----
+
+	List<Lineup> getLineups()
+	{
+		String json = config.get(BATilesConfig.BA_TILES_CONFIG_GROUP, LINEUPS_KEY);
+		if (Strings.isNullOrEmpty(json))
+		{
+			return Collections.emptyList();
+		}
+
+		// CHECKSTYLE:OFF
+		List<Lineup> lineups = gson.fromJson(json, new TypeToken<List<Lineup>>(){}.getType());
+		// CHECKSTYLE:ON
+		return lineups == null ? Collections.emptyList() : lineups;
+	}
+
+	List<Lineup> getLineups(String role)
+	{
+		return getLineups().stream().filter(l -> l.getRole().equals(role)).collect(Collectors.toList());
+	}
+
+	Optional<Lineup> getLineup(@Nullable String id)
+	{
+		return getLineups().stream().filter(l -> l.getId().equals(id)).findFirst();
+	}
+
+	/**
+	 * @return whether the role already has a lineup with this name (ignoring case)
+	 */
+	boolean hasLineupNamed(String role, String name)
+	{
+		return getLineups(role).stream().anyMatch(l -> l.getName().equalsIgnoreCase(name));
+	}
+
+	private void saveLineups(List<Lineup> lineups)
+	{
+		if (lineups.isEmpty())
+		{
+			config.unset(BATilesConfig.BA_TILES_CONFIG_GROUP, LINEUPS_KEY);
+		}
+		else
+		{
+			config.set(BATilesConfig.BA_TILES_CONFIG_GROUP, LINEUPS_KEY, gson.toJson(lineups));
+		}
+	}
+
+	/**
+	 * Saves the role's currently active presets, for every wave, as a new lineup, which becomes the role's active
+	 * lineup (it matches what is active).
+	 */
+	Lineup saveCurrentAsLineup(String name, String role)
+	{
+		Map<Integer, String> presetIds = new TreeMap<>();
+		for (int wave = 1; wave <= WAVES; wave++)
+		{
+			String presetId = getActivePresetId(wave, role);
+			if (presetId != null)
+			{
+				presetIds.put(wave, presetId);
+			}
+		}
+		Lineup lineup = addLineup(name, role, presetIds);
+		config.set(BATilesConfig.BA_TILES_CONFIG_GROUP, activeLineupKey(role), lineup.getId());
+		fireChanged();
+		return lineup;
+	}
+
+	/**
+	 * Stores a new lineup without applying it.
+	 */
+	Lineup addLineup(String name, String role, Map<Integer, String> presetIds)
+	{
+		Lineup lineup = new Lineup(UUID.randomUUID().toString(), name, role, new TreeMap<>(presetIds));
+		List<Lineup> lineups = new ArrayList<>(getLineups());
+		lineups.add(lineup);
+		saveLineups(lineups);
+		fireChanged();
+		return lineup;
+	}
+
+	void renameLineup(Lineup lineup, String name)
+	{
+		saveLineups(getLineups().stream()
+				.map(l -> l.getId().equals(lineup.getId()) ? l.withName(name) : l)
+				.collect(Collectors.toList()));
+		fireChanged();
+	}
+
+	/**
+	 * Deletes the lineup. The presets it made active stay active.
+	 */
+	void deleteLineup(Lineup lineup)
+	{
+		saveLineups(getLineups().stream()
+				.filter(l -> !l.getId().equals(lineup.getId()))
+				.collect(Collectors.toList()));
+		if (lineup.getId().equals(getActiveLineupId(lineup.getRole())))
+		{
+			config.unset(BATilesConfig.BA_TILES_CONFIG_GROUP, activeLineupKey(lineup.getRole()));
+		}
+		fireChanged();
+	}
+
+	/**
+	 * Makes the lineup's presets active for its role on every wave (waves it has no preset for get none), and makes
+	 * it the role's active lineup.
+	 */
+	void applyLineup(Lineup lineup)
+	{
+		for (int wave = 1; wave <= WAVES; wave++)
+		{
+			String presetId = lineup.getPresetIds().get(wave);
+			// a lineup can outlive a preset it names only through hand-edited config; treat that wave as empty
+			writeActivePreset(wave, lineup.getRole(), getPreset(presetId).isPresent() ? presetId : null);
+		}
+		config.set(BATilesConfig.BA_TILES_CONFIG_GROUP, activeLineupKey(lineup.getRole()), lineup.getId());
+		fireChanged();
+	}
+
+	/**
+	 * Stops following a lineup for the role, leaving its active presets as they are.
+	 */
+	void clearActiveLineup(String role)
+	{
+		if (getActiveLineupId(role) != null)
+		{
+			config.unset(BATilesConfig.BA_TILES_CONFIG_GROUP, activeLineupKey(role));
+			fireChanged();
+		}
+	}
+
+	/**
+	 * @return the id of the lineup the role follows, or null once any of its waves' presets was changed by hand
+	 */
+	@Nullable
+	String getActiveLineupId(String role)
+	{
+		String id = Strings.emptyToNull(config.get(BATilesConfig.BA_TILES_CONFIG_GROUP, activeLineupKey(role)));
+		return getLineup(id).isPresent() ? id : null;
+	}
+
+	private static String activeLineupKey(String role)
+	{
+		return ACTIVE_LINEUP_PREFIX + role;
+	}
+
+	private static Map<Integer, String> without(Map<Integer, String> presetIds, String presetId)
+	{
+		Map<Integer, String> kept = new TreeMap<>(presetIds);
+		kept.values().removeIf(presetId::equals);
+		return kept;
 	}
 }
