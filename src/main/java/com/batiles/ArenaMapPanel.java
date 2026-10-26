@@ -112,9 +112,9 @@ class ArenaMapPanel extends JPanel
 				int x = toMapX(event.getX());
 				int y = toMapY(event.getY());
 
-				// any tile of the map can be marked, as in game: including ones with objects on them (cannons,
-				// dispensers, cones, ...), which the arena's walkable-tile table leaves out
-				if (mapBounds().contains(x, y))
+				// any tile of the arena can be marked, as in game: including ones with objects on them (cannons,
+				// dispensers, cones, ...), which the walkable-tile table leaves out; not the area outside the walls
+				if (mapBounds().contains(x, y) && ArenaArea.contains(currentLayout(), x, y))
 				{
 					tileClicked.accept(x, y, event);
 				}
